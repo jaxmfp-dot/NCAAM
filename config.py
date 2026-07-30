@@ -140,3 +140,97 @@ RECORD_BASELINE_SKILL = 69        # "average roster" skill level used as the 50/
 INJURY_PRONENESS_BASE = 30
 INJURY_PRONENESS_AGE_FACTOR = 1.5
 WORK_ETHIC_MEAN, WORK_ETHIC_STDEV = 60, 18
+
+# =========================================================================
+# FIGHT ENGINE (Phase 2)
+# =========================================================================
+
+# --- Clock -------------------------------------------------------------
+
+ROUND_SECONDS = 300
+DEFAULT_ROUNDS = 3
+TITLE_ROUNDS = 5
+EXCHANGE_SECONDS_MIN = 6
+EXCHANGE_SECONDS_MAX = 18
+GROUND_EXCHANGE_SECONDS_MIN = 10
+GROUND_EXCHANGE_SECONDS_MAX = 26
+
+# --- Contests ------------------------------------------------------------
+# Every action is resolved as (attacker_rating + noise) vs (defender_rating + noise).
+# CONTEST_VARIANCE is the stdev of that noise -- higher means more upset potential.
+
+CONTEST_VARIANCE = 14
+CONTEST_SCALE = 12.0          # divides the margin before it goes through a logistic curve
+
+# A single draw per fighter per fight ("having a night") added on top of their
+# ratings for the whole bout. Per-exchange noise alone washes out over the ~50-70
+# rolls in a fight (law of large numbers), which crushes upset potential for any
+# real skill gap; this is what keeps "on any given night" true across many sims.
+FIGHT_NIGHT_VARIANCE_STDEV = 10.0
+
+# --- Action tendency weights (who does what, at range) -------------------
+# Raw attribute-derived weights are multiplied by these before a fighter's
+# action is picked at distance; higher = fighter leans into it more.
+
+TENDENCY_TAKEDOWN_MULT = 1.15
+TENDENCY_CLINCH_MULT = 0.75
+TENDENCY_STRIKE_MULT = 1.0
+
+# --- Stamina ---------------------------------------------------------
+
+STAMINA_START = 100.0
+STAMINA_REGEN_PER_EXCHANGE = 1.6      # baseline passive regen each exchange, scaled by cardio/recovery
+STAMINA_COST_STRIKE_THROWN = 2.5
+STAMINA_COST_STRIKE_LANDED_BONUS = 1.0
+STAMINA_COST_TAKEDOWN_ATTEMPT = 6.0
+STAMINA_COST_TAKEDOWN_LANDED_BONUS = 2.0
+STAMINA_COST_CLINCH_EXCHANGE = 3.0
+STAMINA_COST_GROUND_EXCHANGE = 4.0
+STAMINA_COST_SUB_ATTEMPT = 7.0
+ROUND_REST_REGEN_BASE = 34.0          # flat regen between rounds, scaled by recovery attribute
+STAMINA_EFFECT_FLOOR = 0.55           # a fully gassed fighter still performs at this fraction
+
+# --- Damage / health -----------------------------------------------------
+
+HEALTH_START = 100.0
+DAMAGE_BASE_SCALE = 0.34
+DAMAGE_MIN = 1.0
+DAMAGE_MAX = 28.0
+DAMAGE_ACCUMULATED_DEFENSE_PENALTY = 0.25  # max fraction of defense lost as health nears 0
+
+KNOCKDOWN_HEALTH_THRESHOLD = 42       # health at/below this after a clean shot triggers a knockdown
+CRIT_CHANCE_BASE = 0.05
+CRIT_POWER_GAP_SCALE = 0.004
+CRIT_DAMAGE_MULT = 1.8
+FOLLOWUP_STRIKES_MIN = 2
+FOLLOWUP_STRIKES_MAX = 4
+FOLLOWUP_DEFENSE_MULT = 0.4           # defender's effective defense while dazed on the ground/against the cage
+TKO_STOPPAGE_CHANCE_PER_FOLLOWUP = 0.32
+MAX_KNOCKDOWNS_BEFORE_TKO = 3         # three-knockdown-rule equivalent
+
+# --- Cuts ------------------------------------------------------------
+
+CUT_CHANCE_PER_LANDED_STRIKE = 0.02
+CUT_SEVERITY_MIN, CUT_SEVERITY_MAX = 5, 18
+CUT_DOCTOR_STOPPAGE_THRESHOLD = 70
+CUT_DOCTOR_STOPPAGE_CHANCE = 0.5      # checked between rounds once severity crosses the threshold
+
+# --- Submissions -----------------------------------------------------
+
+SUB_CONTEST_VARIANCE = 12
+SUB_TAP_MARGIN_THRESHOLD = 16         # contest margin needed before a tap is even possible
+SUB_TAP_CHANCE_SCALE = 0.03           # extra margin above threshold -> additional tap probability
+
+# --- Round scoring (10-9 / 10-8) --------------------------------------
+
+EFFECTIVENESS_SIG_STRIKE = 1.0
+EFFECTIVENESS_TAKEDOWN = 5.0
+EFFECTIVENESS_CONTROL_MINUTE = 3.0
+EFFECTIVENESS_KNOCKDOWN = 15.0
+EFFECTIVENESS_SUB_ATTEMPT = 4.0
+
+JUDGE_COUNT = 3
+JUDGE_SCORE_NOISE = 6.0               # per-judge noise, source of split/majority decisions
+ROUND_DOMINANT_MARGIN = 25.0          # effectiveness margin (post-noise) that earns a 10-8
+ROUND_DRAW_MARGIN = 3.0               # margin below which a 10-10 round becomes possible
+ROUND_DRAW_CHANCE = 0.06

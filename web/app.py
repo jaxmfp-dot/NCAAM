@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import config  # noqa: E402
+from engine.fight.simulator import simulate_fight, simulate_many  # noqa: E402
 from engine.generator import generate_universe  # noqa: E402
 from engine.importer import import_fighters  # noqa: E402
 from models import db, fighter as fighter_model  # noqa: E402
@@ -36,6 +37,17 @@ class CreateSaveRequest(BaseModel):
     mode: Literal["generate", "import", "empty"] = "generate"
     seed: Optional[int] = None
     import_filename: Optional[str] = None
+
+
+class FightTestRequest(BaseModel):
+    fighter_a_id: int
+    fighter_b_id: int
+    rounds: int = config.DEFAULT_ROUNDS
+    seed: Optional[int] = None
+
+
+class FightBatchRequest(FightTestRequest):
+    n: int = 1000
 
 
 @app.get("/api/saves")
@@ -129,6 +141,37 @@ def api_fighter_portrait(slot: str, fighter_id: int):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Portrait file missing on disk")
     return FileResponse(path)
+
+
+def _fetch_pair(conn, fighter_a_id: int, fighter_b_id: int) -> tuple[dict, dict]:
+    a = fighter_model.get_fighter(conn, fighter_a_id)
+    b = fighter_model.get_fighter(conn, fighter_b_id)
+    if a is None or b is None:
+        missing = fighter_a_id if a is None else fighter_b_id
+        raise HTTPException(status_code=404, detail=f"Fighter {missing} not found")
+    return a, b
+
+
+@app.post("/api/saves/{slot}/fight-test")
+def api_fight_test(slot: str, req: FightTestRequest):
+    conn = _get_conn(slot)
+    try:
+        a, b = _fetch_pair(conn, req.fighter_a_id, req.fighter_b_id)
+    finally:
+        conn.close()
+    return simulate_fight(a, b, rounds=req.rounds, seed=req.seed)
+
+
+@app.post("/api/saves/{slot}/fight-test/batch")
+def api_fight_test_batch(slot: str, req: FightBatchRequest):
+    if req.n < 1 or req.n > 5000:
+        raise HTTPException(status_code=400, detail="n must be between 1 and 5000")
+    conn = _get_conn(slot)
+    try:
+        a, b = _fetch_pair(conn, req.fighter_a_id, req.fighter_b_id)
+    finally:
+        conn.close()
+    return simulate_many(a, b, n=req.n, rounds=req.rounds, seed=req.seed)
 
 
 # SPA static assets + index fallback (mounted last so /api routes take priority)

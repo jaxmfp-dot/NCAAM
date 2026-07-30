@@ -46,6 +46,7 @@ function renderNav() {
   topnav.innerHTML = "";
   if (slot) {
     topnav.appendChild(el(`<a href="#/roster">Roster</a>`));
+    topnav.appendChild(el(`<a href="#/fight-tester">Fight Tester</a>`));
     topnav.appendChild(el(`<a href="#/">Switch Save</a>`));
   }
 }
@@ -59,6 +60,8 @@ async function router() {
       await renderSaveSelect();
     } else if (hash === "#/roster") {
       await renderRoster();
+    } else if (hash === "#/fight-tester") {
+      await renderFightTester();
     } else if (fighterMatch) {
       await renderFighterProfile(parseInt(fighterMatch[1], 10));
     } else {
@@ -272,6 +275,178 @@ async function renderFighterProfile(id) {
         </div>
       </div>
       <div class="attr-groups">${groupsHtml}</div>
+    </div>
+  `;
+}
+
+// ---------- Fight Tester ----------
+
+async function renderFightTester() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+
+  const fighters = await api(`/api/saves/${slot}/fighters?sort=name`);
+  const grouped = {};
+  fighters.forEach(f => { (grouped[f.weight_class] ||= []).push(f); });
+
+  function optionsHtml(selectedId) {
+    return Object.entries(grouped).map(([division, list]) => `
+      <optgroup label="${division}">
+        ${list.map(f => `<option value="${f.id}" ${f.id === selectedId ? "selected" : ""}>
+          ${f.name}${f.nickname ? ' "' + f.nickname + '"' : ""} (${f.record})
+        </option>`).join("")}
+      </optgroup>
+    `).join("");
+  }
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Fight Tester</h2>
+      <div class="toolbar">
+        <select id="ft-a">${optionsHtml(fighters[0]?.id)}</select>
+        <span style="color:var(--text-dim); font-weight:700;">VS</span>
+        <select id="ft-b">${optionsHtml(fighters[1]?.id)}</select>
+        <select id="ft-rounds">
+          <option value="3">3 Rounds</option>
+          <option value="5">5 Rounds (Title)</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="ft-sim-one">Simulate Fight</button>
+        <input type="number" id="ft-n" value="1000" min="10" max="5000" style="width:90px;">
+        <button class="btn secondary" id="ft-sim-many">Simulate N Times</button>
+      </div>
+    </div>
+    <div id="ft-results"></div>
+  `;
+
+  document.getElementById("ft-sim-one").addEventListener("click", () => runFightTest(slot, false));
+  document.getElementById("ft-sim-many").addEventListener("click", () => runFightTest(slot, true));
+}
+
+function _ftParams() {
+  return {
+    fighter_a_id: parseInt(document.getElementById("ft-a").value, 10),
+    fighter_b_id: parseInt(document.getElementById("ft-b").value, 10),
+    rounds: parseInt(document.getElementById("ft-rounds").value, 10),
+  };
+}
+
+async function runFightTest(slot, batch) {
+  const results = document.getElementById("ft-results");
+  const params = _ftParams();
+  if (params.fighter_a_id === params.fighter_b_id) {
+    results.innerHTML = `<div class="error-state">Pick two different fighters.</div>`;
+    return;
+  }
+
+  if (batch) {
+    const n = parseInt(document.getElementById("ft-n").value, 10) || 1000;
+    results.innerHTML = `<div class="empty-state">Simulating ${n} fights...</div>`;
+    try {
+      const r = await api(`/api/saves/${slot}/fight-test/batch`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...params, n }),
+      });
+      results.innerHTML = renderBatchResult(r);
+    } catch (err) {
+      results.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+    }
+  } else {
+    results.innerHTML = `<div class="empty-state">Simulating...</div>`;
+    try {
+      const r = await api(`/api/saves/${slot}/fight-test`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      results.innerHTML = renderSingleResult(r);
+    } catch (err) {
+      results.innerHTML = `<div class="error-state">Error: ${err.message}</div>`;
+    }
+  }
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function statsTableHtml(r) {
+  const a = r.fighter_a, b = r.fighter_b;
+  const rows = [
+    ["Sig. Strikes", `${a.stats.sig_strikes_landed}/${a.stats.sig_strikes_attempted}`,
+     `${b.stats.sig_strikes_landed}/${b.stats.sig_strikes_attempted}`],
+    ["Takedowns", `${a.stats.takedowns_landed}/${a.stats.takedowns_attempted}`,
+     `${b.stats.takedowns_landed}/${b.stats.takedowns_attempted}`],
+    ["Control Time", formatTime(a.stats.control_seconds), formatTime(b.stats.control_seconds)],
+    ["Knockdowns", a.stats.knockdowns, b.stats.knockdowns],
+    ["Sub Attempts", a.stats.sub_attempts, b.stats.sub_attempts],
+  ];
+  return `
+    <table class="stats-table">
+      <thead><tr><th>${a.name}</th><th></th><th>${b.name}</th></tr></thead>
+      <tbody>
+        ${rows.map(([label, av, bv]) => `<tr><td>${av}</td><td class="stat-label">${label}</td><td>${bv}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function scorecardHtml(sc) {
+  return `
+    <div class="scorecard">
+      <span class="badge">Judges: ${sc.judges.map(j => j[0] + "-" + j[1]).join(" | ")}</span>
+      <span class="badge">Effectiveness ${sc.eff_a} - ${sc.eff_b}</span>
+    </div>
+  `;
+}
+
+function renderSingleResult(r) {
+  const winnerLine = r.winner_name
+    ? `<strong>${r.winner_name}</strong> wins by ${r.method_detail} &middot; Round ${r.round}, ${r.time}`
+    : `Draw &middot; ${r.method_detail}`;
+
+  const roundsHtml = r.play_by_play.map((lines, i) => `
+    <div class="panel">
+      <h3>Round ${i + 1}</h3>
+      <div class="pbp">${lines.map(l => `<p>${l}</p>`).join("")}</div>
+      ${r.scorecards[i] ? scorecardHtml(r.scorecards[i]) : ""}
+    </div>
+  `).join("");
+
+  return `
+    <div class="panel">
+      <h2>${winnerLine}</h2>
+      ${statsTableHtml(r)}
+    </div>
+    ${roundsHtml}
+  `;
+}
+
+function methodBreakdown(methods, n) {
+  const order = ["KO", "TKO", "SUB", "DEC", "DRAW"];
+  return order.filter(m => methods[m]).map(m => `${m}: ${methods[m]} (${(methods[m] / n * 100).toFixed(1)}%)`).join(" &middot; ")
+    || "&mdash;";
+}
+
+function renderBatchResult(r) {
+  return `
+    <div class="panel">
+      <h2>${r.n} Simulations</h2>
+      <table class="stats-table">
+        <thead><tr><th>${r.fighter_a_name}</th><th></th><th>${r.fighter_b_name}</th></tr></thead>
+        <tbody>
+          <tr><td>${r.win_pct_a}%</td><td class="stat-label">Win Rate</td><td>${r.win_pct_b}%</td></tr>
+          <tr><td colspan="3" style="text-align:center; color:var(--text-dim); padding-top:8px;">
+            Draws: ${r.draws} (${r.draw_pct}%)
+          </td></tr>
+          <tr><td>${methodBreakdown(r.methods_a, r.n)}</td><td class="stat-label">Methods</td>
+              <td>${methodBreakdown(r.methods_b, r.n)}</td></tr>
+        </tbody>
+      </table>
+      <p class="meta" style="color:var(--text-dim); margin-top:10px;">
+        Average fight length: ${formatTime(r.avg_fight_seconds)}
+      </p>
     </div>
   `;
 }
