@@ -829,9 +829,10 @@ function renderBoutPlayByPlay(bout) {
 async function renderEventDetail(eventId) {
   const slot = currentSlot();
   if (!slot) { location.hash = "#/"; return; }
+  // booking is UFC-only, so don't offer fighters the server will reject
   const [ev, fighters] = await Promise.all([
     api(`/api/saves/${slot}/events/${eventId}`),
-    api(`/api/saves/${slot}/fighters?sort=name`),
+    api(`/api/saves/${slot}/fighters?sort=name&roster=ufc`),
   ]);
 
   const grouped = {};
