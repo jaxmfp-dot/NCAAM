@@ -70,8 +70,10 @@ def sign_fighter(conn: sqlite3.Connection, fighter_id: int) -> dict:
 
 def judgment_score(fighter: dict, as_of_date: str) -> float:
     skill = sum(fighter[a] for a in _CORE_SKILL_ATTRS) / len(_CORE_SKILL_ATTRS)
+    # shrunk toward .500 so a 5-0 record is weaker evidence than a 20-2 one
+    k = config.FA_WINRATE_SHRINKAGE
     total_fights = fighter["wins"] + fighter["losses"]
-    win_rate = fighter["wins"] / total_fights if total_fights else 0.5
+    win_rate = (fighter["wins"] + 0.5 * k) / (total_fights + k)
     age = compute_age(fighter["dob"], datetime.strptime(as_of_date, "%Y-%m-%d").date())
     youth_bonus = max(0, 30 - age) * config.FA_SCORE_YOUTH_BONUS_PER_YEAR
 

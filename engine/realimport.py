@@ -41,7 +41,13 @@ def _clamp(v: float) -> int:
     return max(config.ATTR_MIN, min(config.ATTR_MAX, round(v)))
 
 
-def _tier_for(rank: str, wins: int) -> float:
+def _tier_for(row: dict) -> float:
+    """Current-skill baseline: an explicit skill_hint wins (used for elite non-UFC
+    fighters who carry no UFC rank), then UFC ranking tier, then record size."""
+    hint = (row.get("skill_hint") or "").strip()
+    if hint:
+        return float(hint)
+    rank = (row.get("rank") or "").strip()
     if rank == "C":
         return TIER_CHAMPION
     if rank:
@@ -51,14 +57,14 @@ def _tier_for(rank: str, wins: int) -> float:
         if r <= 10:
             return TIER_RANK_6_10
         return TIER_RANK_11_15
-    return TIER_UNRANKED_BASE + min(TIER_UNRANKED_WIN_CAP, wins * TIER_UNRANKED_WIN_SCALE)
+    return TIER_UNRANKED_BASE + min(TIER_UNRANKED_WIN_CAP, int(row["wins"]) * TIER_UNRANKED_WIN_SCALE)
 
 
 def _synthesize_fighter(row: dict, as_of: date, rng: random.Random) -> dict:
     rank = (row.get("rank") or "").strip()
     wins, losses = int(row["wins"]), int(row["losses"])
     losses_ko = int(row["losses_ko"])
-    base = _tier_for(rank, wins)
+    base = _tier_for(row)
 
     age = (as_of - datetime.strptime(row["dob"], "%Y-%m-%d").date()).days // 365
     archetype = (row.get("archetype") or "Well-Rounded").strip()
@@ -127,13 +133,23 @@ def import_division_csv(conn, csv_path: Path, start_date: str, seed: int | None 
     rng = random.Random(seed)
     as_of = datetime.strptime(start_date, "%Y-%m-%d").date()
 
-    imported, champions, seeded = 0, [], 0
+    imported, champions, seeded, skipped = 0, [], 0, []
     with csv_path.open(newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             record_ok = (int(row["wins_ko"]) + int(row["wins_sub"]) + int(row["wins_dec"]) == int(row["wins"])
                           and int(row["losses_ko"]) + int(row["losses_sub"]) + int(row["losses_dec"]) == int(row["losses"]))
             if not record_ok:
                 raise ValueError(f"{row['name']}: finish breakdown doesn't sum to the record")
+
+            # source lists overlap (a fighter can appear in both a UFC and a non-UFC
+            # file, or twice within one) -- first occurrence wins
+            exists = conn.execute(
+                "SELECT id FROM fighters WHERE name = ? AND weight_class = ? AND gender = ?",
+                (row["name"].strip(), row["weight_class"], row["gender"]),
+            ).fetchone()
+            if exists:
+                skipped.append(row["name"].strip())
+                continue
 
             fighter = _synthesize_fighter(row, as_of, rng)
             fighter_id = insert_fighter(conn, fighter)
@@ -150,7 +166,8 @@ def import_division_csv(conn, csv_path: Path, start_date: str, seed: int | None 
             imported += 1
 
     conn.commit()
-    return {"file": csv_path.name, "imported": imported, "champions": champions, "rank_seeded": seeded}
+    return {"file": csv_path.name, "imported": imported, "champions": champions,
+            "rank_seeded": seeded, "skipped_duplicates": skipped}
 
 
 def import_all_real(conn, start_date: str, seed: int | None = None) -> list[dict]:

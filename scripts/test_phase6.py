@@ -60,7 +60,11 @@ def test_real_import():
     conn = setup()
 
     hw = fighter_model.list_fighters(conn, division="Heavyweight", gender="M", sort="name", status="Active")
-    check(f"All 43 heavyweights imported ({len(hw)})", len(hw) == 43)
+    ufc_count = sum(1 for f in hw if f["promotion"] == "UFC")
+    check(f"All 95 heavyweights imported ({len(hw)})", len(hw) == 95)
+    check(f"42 on the UFC roster, 53 outside it ({ufc_count} UFC)", ufc_count == 42)
+    check("No duplicate names slipped through the overlap guard",
+          len({f["name"] for f in hw}) == len(hw))
 
     champ = titles.get_champion(conn, "Heavyweight", "M")
     check("Tom Aspinall is champion", champ is not None and champ["name"] == "Tom Aspinall")
@@ -80,6 +84,21 @@ def test_real_import():
           gane["punch_technique"] + gane["fight_iq"] > steveson["punch_technique"] + steveson["fight_iq"])
     check("Young unranked fighter carries upside (potential > current tier)",
           steveson["potential"] > steveson["punch_technique"] - 10)
+
+    kuniev = next(f for f in hw if f["name"] == "Rizvan Kuniev")
+    check("Corrected record applied (Kuniev 15-3-1, 1 NC)",
+          (kuniev["wins"], kuniev["losses"], kuniev["draws"], kuniev["no_contests"]) == (15, 3, 1, 1))
+
+    agents = freeagency.top_free_agents(conn, START)
+    check(f"Free agent list is a full top 20 ({len(agents)})", len(agents) == 20)
+    check("Ngannou tops the availability list", agents[0]["name"] == "Francis Ngannou")
+    top10_names = {a["name"] for a in agents[:13]}
+    expected_elite = {"Francis Ngannou", "Anatoly Malykhin", "Vadim Nemkov", "Denis Goltsov",
+                       "Ryan Bader", "Renan Ferreira", "Valentin Moldavsky", "Phil De Fries"}
+    check("The supplied elite non-UFC names dominate the top of the list",
+          expected_elite.issubset(top10_names))
+    small_sample = [a["name"] for a in agents[:10] if a["wins"] + a["losses"] <= 3]
+    check("No tiny-sample records in the top 10 (win-rate shrinkage works)", not small_sample)
     return conn
 
 
@@ -108,7 +127,8 @@ def test_cut_and_sign(conn):
 
     agents = freeagency.top_free_agents(conn, START)
     agent_names = [f["name"] for f in agents]
-    check("Cut ex-champion tops the free agent list", agent_names and agent_names[0] == champ["name"])
+    check("Cut ex-champion lands in the top 3 of the availability list (alongside Ngannou et al.)",
+          champ["name"] in agent_names[:3])
     check("Free agent scores are sorted descending",
           all(agents[i]["fa_score"] >= agents[i + 1]["fa_score"] for i in range(len(agents) - 1)))
 

@@ -362,5 +362,6 @@ FREE_AGENT_LIST_SIZE = 20
 FA_SCORE_SKILL_WEIGHT = 0.6       # core skill average
 FA_SCORE_POTENTIAL_WEIGHT = 0.25
 FA_SCORE_WINRATE_WEIGHT = 25.0    # scaled by career win rate
+FA_WINRATE_SHRINKAGE = 4.0        # phantom .500 fights blended in, so a 1-0 record isn't "undefeated" evidence
 FA_SCORE_MOMENTUM_WEIGHT = 0.3
 FA_SCORE_YOUTH_BONUS_PER_YEAR = 0.6  # bonus per year under 30 (age curve upside)
