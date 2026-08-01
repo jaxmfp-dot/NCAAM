@@ -160,6 +160,17 @@ input[type=text], select {
 }
 .streak-badge.streak-W { background: rgba(59,168,95,0.18); color: var(--green); }
 .streak-badge.streak-L { background: rgba(214,59,59,0.18); color: var(--red); }
+.promo-badge {
+  display: inline-block;
+  margin-top: 6px;
+  margin-right: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(224,166,58,0.15);
+  color: var(--accent-2);
+}
 
 /* Compare */
 

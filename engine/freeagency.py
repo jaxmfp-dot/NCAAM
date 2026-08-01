@@ -87,7 +87,10 @@ def judgment_score(fighter: dict, as_of_date: str) -> float:
 
 
 def top_free_agents(conn: sqlite3.Connection, as_of_date: str, n: int | None = None) -> list[dict]:
-    n = n or config.FREE_AGENT_LIST_SIZE
+    """Judgment-ranked available fighters. n=None -> the standard top-20 list;
+    n=0 -> the entire available pool."""
+    if n is None:
+        n = config.FREE_AGENT_LIST_SIZE
     rows = conn.execute(
         "SELECT * FROM fighters WHERE status = 'Active' AND promotion != 'UFC'"
     ).fetchall()
@@ -97,7 +100,7 @@ def top_free_agents(conn: sqlite3.Connection, as_of_date: str, n: int | None = N
         f["fa_score"] = round(judgment_score(f, as_of_date), 1)
         scored.append(f)
     scored.sort(key=lambda f: f["fa_score"], reverse=True)
-    return scored[:n]
+    return scored if n == 0 else scored[:n]
 
 
 # --- Off-screen fights ---------------------------------------------------

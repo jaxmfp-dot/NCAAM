@@ -206,6 +206,11 @@ async function renderRoster() {
         <option value="popularity">Sort: Popularity</option>
         <option value="age">Sort: Youngest</option>
       </select>
+      <select id="f-roster">
+        <option value="">Everyone</option>
+        <option value="ufc">UFC Roster</option>
+        <option value="non-ufc">Outside the UFC</option>
+      </select>
     </div>
     <div class="toolbar">
       <label class="filter-label">Age <input type="number" id="f-age-min" placeholder="min" min="18" max="60" style="width:60px;"></label>
@@ -230,6 +235,7 @@ async function renderRoster() {
   const streakSel = document.getElementById("f-streak");
   const streakMinInput = document.getElementById("f-streak-min");
   const rankedOnlyCheckbox = document.getElementById("f-ranked-only");
+  const rosterSel = document.getElementById("f-roster");
 
   let searchTimer;
   async function load() {
@@ -248,6 +254,7 @@ async function renderRoster() {
       params.set("streak_type", streakSel.value);
       params.set("min_streak", streakMinInput.value || "1");
     }
+    if (rosterSel.value) params.set("roster", rosterSel.value);
 
     const fighters = await api(`/api/saves/${slot}/fighters?${params.toString()}`);
     grid.innerHTML = fighters.length ? fighters.map(f => `
@@ -257,6 +264,7 @@ async function renderRoster() {
           <div class="name">${f.name}</div>
           ${f.nickname ? `<div class="nickname">"${f.nickname}"</div>` : ""}
           <div class="sub">${f.weight_class} &middot; ${f.record} &middot; age ${f.age}</div>
+          ${f.promotion !== "UFC" ? `<div class="promo-badge">${f.promotion}</div>` : ""}
           ${f.streak && f.streak.type && f.streak.count >= 2
             ? `<div class="streak-badge streak-${f.streak.type}">${f.streak.type}${f.streak.count}</div>` : ""}
         </div>
@@ -268,7 +276,7 @@ async function renderRoster() {
     });
   }
 
-  [divisionSel, sortSel, streakSel, streakMinInput, rankedOnlyCheckbox].forEach(el => {
+  [divisionSel, sortSel, streakSel, streakMinInput, rankedOnlyCheckbox, rosterSel].forEach(el => {
     el.addEventListener("change", load);
   });
   [searchInput, ageMinInput, ageMaxInput].forEach(el => {
@@ -1312,10 +1320,27 @@ async function renderCompare() {
 
 // ---------- Free Agents ----------
 
-async function renderFreeAgents() {
+function freeAgentRowsHtml(agents, startRank) {
+  return agents.map((f, i) => `
+    <tr>
+      <td>${startRank + i}</td>
+      <td><a href="#/fighter/${f.id}">${f.name}</a>${f.nickname ? ` <span class="nickname">"${f.nickname}"</span>` : ""}</td>
+      <td>${f.weight_class}</td>
+      <td>${f.record}</td>
+      <td>${f.age}</td>
+      <td>${f.promotion}</td>
+      <td>${f.fa_score}</td>
+      <td><button class="btn btn-sm" data-sign-id="${f.id}" data-sign-name="${f.name}">Sign</button></td>
+    </tr>
+  `).join("");
+}
+
+async function renderFreeAgents(showAll = false) {
   const slot = currentSlot();
   if (!slot) { location.hash = "#/"; return; }
-  const agents = await api(`/api/saves/${slot}/free-agents`);
+  const agents = await api(`/api/saves/${slot}/free-agents${showAll ? "?limit=0" : ""}`);
+  const top20 = agents.slice(0, 20);
+  const rest = agents.slice(20);
 
   app.innerHTML = `
     <div class="panel">
@@ -1324,33 +1349,37 @@ async function renderFreeAgents() {
         The best available fighters outside the UFC, ranked by the game's scouting judgment.
         Their records keep evolving as they fight off-screen.
       </p>
-      ${agents.length ? `
+      ${top20.length ? `
         <table class="stats-table rankings-table">
-          <thead><tr><th>#</th><th>Fighter</th><th>Division</th><th>Record</th><th>Age</th><th>Score</th><th></th></tr></thead>
-          <tbody>
-            ${agents.map((f, i) => `
-              <tr>
-                <td>${i + 1}</td>
-                <td><a href="#/fighter/${f.id}">${f.name}</a>${f.nickname ? ` <span class="nickname">"${f.nickname}"</span>` : ""}</td>
-                <td>${f.weight_class}</td>
-                <td>${f.record}</td>
-                <td>${f.age}</td>
-                <td>${f.fa_score}</td>
-                <td><button class="btn btn-sm" data-sign-id="${f.id}" data-sign-name="${f.name}">Sign</button></td>
-              </tr>
-            `).join("")}
-          </tbody>
+          <thead><tr><th>#</th><th>Fighter</th><th>Division</th><th>Record</th><th>Age</th><th>Promotion</th><th>Score</th><th></th></tr></thead>
+          <tbody>${freeAgentRowsHtml(top20, 1)}</tbody>
         </table>
       ` : `<div class="empty-state">No free agents available right now.</div>`}
     </div>
+    ${showAll && rest.length ? `
+      <div class="panel">
+        <h2>Rest of the Available Pool (${rest.length})</h2>
+        <table class="stats-table rankings-table">
+          <thead><tr><th>#</th><th>Fighter</th><th>Division</th><th>Record</th><th>Age</th><th>Promotion</th><th>Score</th><th></th></tr></thead>
+          <tbody>${freeAgentRowsHtml(rest, 21)}</tbody>
+        </table>
+      </div>
+    ` : ""}
+    ${!showAll && top20.length === 20 ? `
+      <div class="panel" style="text-align:center;">
+        <button class="btn secondary" id="fa-show-all">Show the Entire Available Pool</button>
+      </div>
+    ` : ""}
   `;
+
+  document.getElementById("fa-show-all")?.addEventListener("click", () => renderFreeAgents(true));
 
   app.querySelectorAll("[data-sign-id]").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm(`Sign ${btn.dataset.signName} to the UFC?`)) return;
       try {
         await api(`/api/saves/${slot}/fighters/${btn.dataset.signId}/sign`, { method: "POST" });
-        await renderFreeAgents();
+        await renderFreeAgents(showAll);
       } catch (err) { alert(err.message); }
     });
   });

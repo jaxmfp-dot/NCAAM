@@ -154,13 +154,17 @@ def api_list_fighters(
     streak_type: Optional[Literal["W", "L"]] = None,
     min_streak: int = 1,
     ranked_only: bool = False,
+    roster: Optional[Literal["ufc", "non-ufc"]] = None,
 ):
     conn = _get_conn(slot)
     try:
         fighters = fighter_model.list_fighters(
             conn, division=division, gender=gender, search=search, status=status, sort=sort,
             age_min=age_min, age_max=age_max,
+            promotion="UFC" if roster == "ufc" else None,
         )
+        if roster == "non-ufc":
+            fighters = [f for f in fighters if f["promotion"] != "UFC"]
 
         streaks = event_model.compute_streaks(conn)
         for f in fighters:
@@ -220,11 +224,11 @@ def api_sign_fighter(slot: str, fighter_id: int):
 
 
 @app.get("/api/saves/{slot}/free-agents")
-def api_free_agents(slot: str):
+def api_free_agents(slot: str, limit: Optional[int] = None):
     conn = _get_conn(slot)
     try:
         state = db.get_game_state(conn)
-        return freeagency.top_free_agents(conn, state["current_date"])
+        return freeagency.top_free_agents(conn, state["current_date"], n=limit)
     finally:
         conn.close()
 
