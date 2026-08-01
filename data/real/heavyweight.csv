@@ -1,0 +1,44 @@
+name,nickname,dob,nationality,weight_class,gender,promotion,rank,wins,losses,draws,no_contests,wins_ko,wins_sub,wins_dec,losses_ko,losses_sub,losses_dec,archetype,popularity,height_in,reach_in,stance
+Tom Aspinall,,1993-04-11,England,Heavyweight,M,UFC,C,15,3,0,1,12,3,0,2,0,1,Well-Rounded,86,77,78,Orthodox
+Ciryl Gane,Bon Gamin,1990-04-12,France,Heavyweight,M,UFC,1,14,2,0,1,5,3,6,0,0,2,Kickboxer,87,76.5,81,Orthodox
+Alexander Volkov,Drago,1988-10-24,Russia,Heavyweight,M,UFC,2,40,11,0,0,25,4,11,5,3,3,Kickboxer,87,79,80,Orthodox
+Waldo Cortes-Acosta,Salsa Boy,1991-07-08,Dominican Republic,Heavyweight,M,UFC,3,17,3,0,0,9,0,8,1,0,2,Boxer,78,76,78,Orthodox
+Sergei Pavlovich,,1992-05-13,Russia,Heavyweight,M,UFC,4,21,3,0,0,18,0,3,2,0,1,Boxer,78,75,84,Orthodox
+Alex Pereira,Poatan,1987-07-07,Brazil,Heavyweight,M,UFC,5,14,3,0,0,11,0,3,1,0,2,Kickboxer,95,76,79,Orthodox
+Rizvan Kuniev,,1992-06-15,Russia,Heavyweight,M,UFC,6,15,3,1,1,8,1,6,1,0,2,Wrestler,49,74,76,Orthodox
+Serghei Spivac,Polar Bear,1995-01-24,Moldova,Heavyweight,M,UFC,7,19,5,0,0,6,7,6,4,0,1,Ground Control,74,75,78,Orthodox
+Valter Walker,The Clean Monster,1997-11-14,Brazil,Heavyweight,M,UFC,8,14,1,0,0,3,9,2,1,0,0,BJJ Specialist,45,77,78,Orthodox
+Josh Hokit,,1997-09-20,United States,Heavyweight,M,UFC,9,6,0,0,0,5,0,1,0,0,0,Wrestler,38,74,76,Orthodox
+Curtis Blaydes,Razor,1991-02-18,United States,Heavyweight,M,UFC,10,20,5,0,1,11,0,9,4,0,1,Wrestler,71,76,80,Orthodox
+Derrick Lewis,The Black Beast,1985-02-07,United States,Heavyweight,M,UFC,11,31,12,0,1,27,1,3,6,3,3,Brawler,60,75,79,Orthodox
+Ante Delija,Walking Trouble,1990-03-06,Croatia,Heavyweight,M,UFC,12,28,6,0,0,16,3,9,3,0,3,Well-Rounded,47,75,76,Orthodox
+Marcin Tybura,Tybur,1985-11-09,Poland,Heavyweight,M,UFC,13,28,9,0,0,9,9,10,6,0,3,Ground Control,59,75,78,Orthodox
+Brando Peričić,The Balkan Bear,1998-05-10,Croatia,Heavyweight,M,UFC,14,8,1,0,0,8,0,0,0,0,1,Brawler,30,78,79,Orthodox
+Ryan Spann,Superman,1991-08-11,United States,Heavyweight,M,UFC,15,24,10,0,0,9,10,5,5,3,2,Well-Rounded,48,77,79,Orthodox
+Tallison Teixeira,Xicão,2000-01-15,Brazil,Heavyweight,M,UFC,,10,1,0,0,9,0,1,1,0,0,Brawler,53,79,80,Orthodox
+Shamil Gaziev,,1989-10-15,Bahrain,Heavyweight,M,UFC,,14,3,0,0,10,2,2,2,0,1,Wrestle-Boxer,56,75,76,Orthodox
+Thomas Petersen,The Train,1994-06-01,United States,Heavyweight,M,UFC,,11,5,0,0,5,3,3,3,0,2,Wrestler,52,74,76,Orthodox
+Mick Parkin,,1995-08-15,England,Heavyweight,M,UFC,,9,0,0,0,4,0,5,0,0,0,Volume Striker,35,75,76,Orthodox
+Vitor Petrino,,1997-08-04,Brazil,Heavyweight,M,UFC,,14,1,0,0,6,5,3,0,1,0,Wrestle-Boxer,45,74,77,Southpaw
+Kennedy Nzechukwu,Chosen,1992-03-15,Nigeria,Heavyweight,M,UFC,,16,5,0,0,11,2,3,2,0,3,Kickboxer,44,77,83,Orthodox
+Mario Pinto,,1998-02-20,Portugal,Heavyweight,M,UFC,,11,1,0,0,8,0,3,0,0,1,Boxer,29,76,78,Orthodox
+Tanner Boser,The Bulldozer,1991-08-17,Canada,Heavyweight,M,UFC,,21,10,1,0,10,0,11,4,0,6,Volume Striker,41,74,76,Orthodox
+Jhonata Diniz,,1994-04-10,Brazil,Heavyweight,M,UFC,,9,1,0,0,7,0,2,0,1,0,Kickboxer,36,77,79,Orthodox
+Louie Sutherland,Vanilla Gorilla,1994-09-01,England,Heavyweight,M,UFC,,10,3,0,0,6,2,2,2,0,1,Brawler,33,75,77,Orthodox
+Gokhan Saricam,,1994-01-20,Turkey,Heavyweight,M,UFC,,10,2,0,0,6,2,2,1,0,1,Kickboxer,23,76,77,Orthodox
+Tyrell Fortune,,1990-10-11,United States,Heavyweight,M,UFC,,14,4,0,1,7,0,7,3,0,1,Wrestler,30,74,76,Orthodox
+Steven Asplund,Concrete,2001-03-15,Sweden,Heavyweight,M,UFC,,9,1,0,0,6,0,3,1,0,0,Boxer,26,77,78,Orthodox
+Marcus Buchecha,,1990-01-08,Brazil,Heavyweight,M,UFC,,5,3,1,0,1,4,0,2,0,1,BJJ Specialist,33,75,77,Orthodox
+Tai Tuivasa,Bam Bam,1993-03-16,Australia,Heavyweight,M,UFC,,16,8,0,0,14,1,1,4,3,1,Brawler,62,74,75,Southpaw
+RJ Harris,The Hammer,1995-05-05,United States,Heavyweight,M,UFC,,7,1,0,0,6,0,1,0,0,1,Brawler,21,75,77,Orthodox
+Gable Steveson,,2000-05-31,United States,Heavyweight,M,UFC,,2,0,0,0,2,0,0,0,0,0,Wrestler,21,73,74,Orthodox
+Guilherme Pat,Kong,1996-07-10,Brazil,Heavyweight,M,UFC,,9,2,0,0,4,1,4,0,0,2,Well-Rounded,24,75,77,Orthodox
+Felipe Franco,,1995-03-22,Brazil,Heavyweight,M,UFC,,8,2,0,0,5,0,3,1,0,1,Boxer,27,75,77,Orthodox
+Uran Satybaldiev,Gorilla,1995-09-12,Kyrgyzstan,Heavyweight,M,UFC,,9,1,0,0,3,4,2,0,0,1,Wrestler,27,74,76,Orthodox
+Denzel Freeman,Luke Fox,1996-04-18,United States,Heavyweight,M,UFC,,7,2,0,0,4,1,2,1,0,1,Kickboxer,24,76,78,Orthodox
+Alvin Hines,Goozie,1994-08-25,United States,Heavyweight,M,UFC,,8,1,0,0,5,0,3,1,0,0,Boxer,24,74,76,Orthodox
+Allen Frye Jr.,,1998-11-02,United States,Heavyweight,M,UFC,,5,1,0,0,2,0,3,1,0,0,Wrestle-Boxer,21,75,77,Orthodox
+Max Gimenis,,1993-05-14,Brazil,Heavyweight,M,UFC,,7,1,0,0,4,2,1,0,0,1,BJJ Specialist,21,76,78,Orthodox
+Sean Sharaf,The Smoke,1997-02-09,United States,Heavyweight,M,UFC,,7,1,0,0,6,0,1,0,0,1,Brawler,26,75,77,Orthodox
+Elisha Ellison,The Snack Panther,1996-10-30,United States,Heavyweight,M,UFC,,6,0,0,0,5,0,1,0,0,0,Brawler,24,74,76,Orthodox
+Austen Lane,,1987-10-05,United States,Heavyweight,M,Free Agent,,14,6,0,0,10,2,2,4,1,1,Boxer,38,78,80,Orthodox

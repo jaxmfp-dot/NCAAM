@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data/saves/*.db
+data/portraits/*/
+data/import/fighters.csv
+data/import/fighters.json
+data/import/portraits/*
+!data/import/portraits/.gitkeep
