@@ -59,6 +59,14 @@ def create_save(slot: str, save_name: str, universe_mode: str, start_date: str |
     return conn
 
 
+def get_game_state(conn: sqlite3.Connection) -> dict:
+    return dict(conn.execute("SELECT * FROM game_state WHERE id = 1").fetchone())
+
+
+def set_current_date(conn: sqlite3.Connection, new_date: str):
+    conn.execute("UPDATE game_state SET current_date = ? WHERE id = 1", (new_date,))
+
+
 def list_saves() -> list[dict]:
     SAVES_DIR.mkdir(parents=True, exist_ok=True)
     saves = []

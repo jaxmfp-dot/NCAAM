@@ -334,3 +334,35 @@ input[type=text], select {
 .champion-name { font-size: 20px; font-weight: 800; display: block; }
 .rankings-table td, .rankings-table th { text-align: left; padding: 8px 10px; }
 .rankings-table td:first-child, .rankings-table th:first-child { text-align: center; width: 40px; }
+
+/* Calendar / Year review */
+
+.calendar-date {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--accent-2);
+  letter-spacing: 1px;
+}
+#cal-summary h4 {
+  margin: 14px 0 4px;
+  color: var(--accent-2);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+#cal-summary ul, #yr-results ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: var(--text);
+}
+#cal-summary li, #yr-results li { margin: 3px 0; }
+#yr-results h3 {
+  margin-top: 18px;
+  color: var(--accent-2);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}

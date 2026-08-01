@@ -18,7 +18,7 @@ MENTAL_ATTRS = [
     "heart", "killer_instinct", "fight_iq", "composure", "work_ethic", "consistency",
 ]
 CAREER_ATTRS = [
-    "potential", "momentum", "prime_start_age", "prime_end_age", "popularity",
+    "potential", "physical_gift", "momentum", "prime_start_age", "prime_end_age", "popularity",
     "contract_status", "status", "archetype",
 ]
 
@@ -43,7 +43,7 @@ RECORD_FIELDS = [
 
 INSERTABLE_FIELDS = (
     IDENTITY_FIELDS + RECORD_FIELDS + SKILL_ATTRS
-    + ["potential", "momentum", "prime_start_age", "prime_end_age", "popularity",
+    + ["potential", "physical_gift", "momentum", "prime_start_age", "prime_end_age", "popularity",
        "contract_status", "status", "archetype"]
 )
 

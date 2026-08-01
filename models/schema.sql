@@ -76,13 +76,21 @@ CREATE TABLE IF NOT EXISTS fighters (
 
     -- Career
     potential           INTEGER NOT NULL,
+    physical_gift        INTEGER NOT NULL DEFAULT 70,  -- raw athletic ceiling (Phase 1 generator roll, persisted for aging)
     momentum            INTEGER NOT NULL DEFAULT 0,
     prime_start_age     INTEGER NOT NULL,
     prime_end_age       INTEGER NOT NULL,
     popularity          INTEGER NOT NULL DEFAULT 20,
     contract_status     TEXT NOT NULL DEFAULT 'Signed',
-    status               TEXT NOT NULL DEFAULT 'Active',
+    status               TEXT NOT NULL DEFAULT 'Active',  -- Active | Retired (roster membership; independent of injury_status)
     archetype           TEXT,
+
+    -- Injuries (Phase 4)
+    injury_status        TEXT NOT NULL DEFAULT 'Healthy',  -- Healthy | Injured
+    injury_description    TEXT,
+    injury_return_date   TEXT,   -- ISO date
+
+    retired_date         TEXT,   -- ISO date, set when status becomes 'Retired'
 
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -145,6 +153,7 @@ CREATE TABLE IF NOT EXISTS bouts (
     method_detail           TEXT,
     result_round            INTEGER,
     result_time             TEXT,
+    title_change            INTEGER NOT NULL DEFAULT 0,  -- 1 if this title fight changed/crowned a champion
     stats_json              TEXT,
     scorecards_json         TEXT,
     play_by_play_json       TEXT,

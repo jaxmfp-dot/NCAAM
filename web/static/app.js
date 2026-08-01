@@ -48,6 +48,8 @@ function renderNav() {
     topnav.appendChild(el(`<a href="#/roster">Roster</a>`));
     topnav.appendChild(el(`<a href="#/events">Events</a>`));
     topnav.appendChild(el(`<a href="#/rankings">Rankings</a>`));
+    topnav.appendChild(el(`<a href="#/calendar">Calendar</a>`));
+    topnav.appendChild(el(`<a href="#/hall-of-records">Hall of Records</a>`));
     topnav.appendChild(el(`<a href="#/fight-tester">Fight Tester</a>`));
     topnav.appendChild(el(`<a href="#/">Switch Save</a>`));
   }
@@ -71,6 +73,10 @@ async function router() {
       await renderEventDetail(parseInt(eventMatch[1], 10));
     } else if (hash === "#/rankings") {
       await renderRankings();
+    } else if (hash === "#/calendar") {
+      await renderCalendar();
+    } else if (hash === "#/hall-of-records") {
+      await renderHallOfRecords();
     } else if (fighterMatch) {
       await renderFighterProfile(parseInt(fighterMatch[1], 10));
     } else {
@@ -813,4 +819,158 @@ async function renderRankings() {
   sel.addEventListener("change", load);
   if (divisions.length) await load();
   else document.getElementById("rk-results").innerHTML = `<div class="empty-state">No active fighters yet.</div>`;
+}
+
+// ---------- Calendar / Year in Review ----------
+
+function renderCalendarSummary(summary) {
+  const lines = [`<div class="meta-line">Advanced ${summary.weeks_advanced} week(s): ${summary.from} &rarr; ${summary.to}</div>`];
+
+  if (summary.retirements.length) {
+    lines.push(`<h4>Retirements</h4><ul>${summary.retirements.map(r =>
+      `<li><a href="#/fighter/${r.id}">${r.name}</a></li>`).join("")}</ul>`);
+  }
+  if (summary.training_injuries.length) {
+    lines.push(`<h4>Training Injuries</h4><ul>${summary.training_injuries.map(i =>
+      `<li><a href="#/fighter/${i.id}">${i.name}</a> &mdash; ${i.description} (out ${i.weeks}w, back ${i.return_date})</li>`).join("")}</ul>`);
+  }
+  if (summary.recoveries.length) {
+    lines.push(`<h4>Recovered from Injury</h4><ul>${summary.recoveries.map(r =>
+      `<li><a href="#/fighter/${r.id}">${r.name}</a></li>`).join("")}</ul>`);
+  }
+  if (summary.new_prospects.length) {
+    lines.push(`<h4>New Prospects (${summary.new_prospects.length})</h4><ul>${summary.new_prospects.map(p =>
+      `<li><a href="#/fighter/${p.id}">${p.name}</a> &mdash; ${p.weight_class} (Potential ${p.potential})</li>`).join("")}</ul>`);
+  }
+  if (!summary.retirements.length && !summary.training_injuries.length
+      && !summary.recoveries.length && !summary.new_prospects.length) {
+    lines.push(`<div class="empty-state">Quiet stretch &mdash; nothing notable happened.</div>`);
+  }
+  return `<div class="panel">${lines.join("")}</div>`;
+}
+
+function renderYearReviewHtml(review) {
+  const titleHtml = review.title_changes.length ? `
+    <ul>${review.title_changes.map(t => `
+      <li>${t.event_date}: <strong>${t.winner_name}</strong> defeated ${t.loser_name} for the
+        ${t.is_interim ? "Interim " : ""}${t.weight_class} title (${t.method_detail})</li>
+    `).join("")}</ul>
+  ` : `<div class="empty-state">No title changes this year.</div>`;
+
+  const breakoutHtml = review.breakout_prospects.length ? `
+    <ul>${review.breakout_prospects.map(p => `
+      <li><a href="#/fighter/${p.id}">${p.name}</a> &mdash; ${p.weight_class}, ${p.wins_this_year} wins, age ${p.age}</li>
+    `).join("")}</ul>
+  ` : `<div class="empty-state">No standout breakout prospects this year.</div>`;
+
+  const retirementsHtml = review.retirements.length ? `
+    <ul>${review.retirements.map(r => `
+      <li><a href="#/fighter/${r.id}">${r.name}</a> &mdash; ${r.weight_class}, retired at ${r.record} (${r.retired_date})</li>
+    `).join("")}</ul>
+  ` : `<div class="empty-state">No retirements this year.</div>`;
+
+  return `
+    <h3>${review.year} Title Changes</h3>
+    ${titleHtml}
+    <h3>Breakout Prospects</h3>
+    ${breakoutHtml}
+    <h3>Retirements</h3>
+    ${retirementsHtml}
+  `;
+}
+
+async function renderCalendar() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const state = await api(`/api/saves/${slot}/calendar`);
+  const currentYear = new Date(state.current_date).getFullYear();
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Calendar</h2>
+      <div class="calendar-date" id="cal-date-display">${state.current_date}</div>
+      <div class="toolbar" style="margin-top:14px;">
+        <button class="btn" data-weeks="1">Advance 1 Week</button>
+        <button class="btn" data-weeks="4">Advance 1 Month</button>
+        <button class="btn" data-weeks="52">Advance 1 Year</button>
+        <input type="number" id="cal-weeks" value="1" min="1" max="520" style="width:80px;">
+        <button class="btn secondary" id="cal-advance-custom">Advance Custom</button>
+      </div>
+    </div>
+    <div id="cal-summary"></div>
+    <div class="panel">
+      <h2>Year in Review</h2>
+      <div class="toolbar">
+        <input type="number" id="yr-input" placeholder="Year" value="${currentYear}">
+        <button class="btn secondary" id="yr-view-btn">View</button>
+      </div>
+      <div id="yr-results"></div>
+    </div>
+  `;
+
+  async function advance(weeks) {
+    const summaryEl = document.getElementById("cal-summary");
+    summaryEl.innerHTML = `<div class="empty-state">Advancing ${weeks} week(s)...</div>`;
+    try {
+      const summary = await api(`/api/saves/${slot}/calendar/advance`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weeks }),
+      });
+      summaryEl.innerHTML = renderCalendarSummary(summary);
+      document.getElementById("cal-date-display").textContent = summary.to;
+    } catch (err) {
+      summaryEl.innerHTML = `<div class="error-state">${err.message}</div>`;
+    }
+  }
+
+  document.querySelectorAll("[data-weeks]").forEach(btn => {
+    btn.addEventListener("click", () => advance(parseInt(btn.dataset.weeks, 10)));
+  });
+  document.getElementById("cal-advance-custom").addEventListener("click", () => {
+    advance(parseInt(document.getElementById("cal-weeks").value, 10) || 1);
+  });
+
+  document.getElementById("yr-view-btn").addEventListener("click", async () => {
+    const year = parseInt(document.getElementById("yr-input").value, 10);
+    const resultsEl = document.getElementById("yr-results");
+    resultsEl.innerHTML = `<div class="empty-state">Loading...</div>`;
+    try {
+      const review = await api(`/api/saves/${slot}/year-review/${year}`);
+      resultsEl.innerHTML = renderYearReviewHtml(review);
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="error-state">${err.message}</div>`;
+    }
+  });
+}
+
+// ---------- Hall of Records ----------
+
+async function renderHallOfRecords() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const retired = await api(`/api/saves/${slot}/fighters?status=Retired&sort=name`);
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Hall of Records</h2>
+      <p class="meta" style="color:var(--text-dim);">${retired.length} retired fighter(s)</p>
+    </div>
+    <div class="roster-grid">
+      ${retired.length ? retired.map(f => `
+        <div class="fighter-card" data-id="${f.id}">
+          <div class="portrait-wrap-holder">${portraitTag(slot, f.id, f.name, "portrait-wrap")}</div>
+          <div class="info">
+            <div class="name">${f.name}</div>
+            ${f.nickname ? `<div class="nickname">"${f.nickname}"</div>` : ""}
+            <div class="sub">${f.weight_class} &middot; ${f.record}</div>
+            <div class="sub">Retired ${f.retired_date || ""}</div>
+          </div>
+        </div>
+      `).join("") : `<div class="empty-state">No one has retired yet.</div>`}
+    </div>
+  `;
+
+  app.querySelectorAll("[data-id]").forEach(card => {
+    card.addEventListener("click", () => { location.hash = `#/fighter/${card.dataset.id}`; });
+  });
 }

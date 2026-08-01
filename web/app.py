@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import config  # noqa: E402
-from engine import booking, rankings, titles  # noqa: E402
+from engine import booking, calendar, rankings, reports, titles  # noqa: E402
 from engine.fight.simulator import simulate_fight, simulate_many  # noqa: E402
 from engine.generator import generate_universe  # noqa: E402
 from engine.importer import import_fighters  # noqa: E402
@@ -68,6 +68,11 @@ class BookBoutRequest(BaseModel):
 
 
 class SimRequest(BaseModel):
+    seed: Optional[int] = None
+
+
+class AdvanceCalendarRequest(BaseModel):
+    weeks: int = 1
     seed: Optional[int] = None
 
 
@@ -327,6 +332,35 @@ def api_head_to_head(slot: str, a: int, b: int):
     conn = _get_conn(slot)
     try:
         return event_model.head_to_head(conn, a, b)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/calendar")
+def api_get_calendar(slot: str):
+    conn = _get_conn(slot)
+    try:
+        return db.get_game_state(conn)
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/calendar/advance")
+def api_advance_calendar(slot: str, req: AdvanceCalendarRequest):
+    if req.weeks < 1 or req.weeks > 520:
+        raise HTTPException(status_code=400, detail="weeks must be between 1 and 520")
+    conn = _get_conn(slot)
+    try:
+        return calendar.advance_weeks(conn, req.weeks, seed=req.seed)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/year-review/{year}")
+def api_year_review(slot: str, year: int):
+    conn = _get_conn(slot)
+    try:
+        return reports.year_in_review(conn, year)
     finally:
         conn.close()
 

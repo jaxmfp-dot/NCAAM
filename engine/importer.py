@@ -161,6 +161,9 @@ def normalize_fighter(record: dict, rng: random.Random, as_of: date | None = Non
     potential = _to_float(record.get("potential"))
     fighter["potential"] = (_clamp_attr(potential) if potential is not None
                              else _clamp_attr(max(avg_skill, avg_skill + rng.randint(5, 20))))
+    physical_gift = _to_float(record.get("physical_gift"))
+    fighter["physical_gift"] = (_clamp_attr(physical_gift) if physical_gift is not None
+                                 else _clamp_attr(fighter["potential"] + rng.gauss(0, config.PHYSICAL_GIFT_NOISE_STDEV)))
     fighter["momentum"] = int(_to_float(record.get("momentum"), 0))
     fighter["prime_start_age"] = int(_to_float(record.get("prime_start_age"),
                                                 rng.randint(config.PRIME_START_MIN, config.PRIME_START_MAX)))

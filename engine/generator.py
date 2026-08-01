@@ -37,7 +37,7 @@ def _clamp(value, lo=config.ATTR_MIN, hi=config.ATTR_MAX):
     return max(lo, min(hi, value))
 
 
-def _skill_fraction(age: int, prime_start: int, prime_end: int) -> float:
+def skill_fraction(age: int, prime_start: int, prime_end: int) -> float:
     if age < prime_start:
         years_experience = max(0, age - config.MIN_DEBUT_AGE)
         ramp = min(1.0, years_experience / config.SKILL_RAMP_YEARS)
@@ -48,7 +48,7 @@ def _skill_fraction(age: int, prime_start: int, prime_end: int) -> float:
     return max(0.4, 1.0 - config.SKILL_DECLINE_PER_YEAR * years_past)
 
 
-def _physical_fraction(age: int, prime_start: int, prime_end: int) -> float:
+def physical_fraction(age: int, prime_start: int, prime_end: int) -> float:
     physical_prime_start = max(config.MIN_DEBUT_AGE, prime_start - 2)
     if age < physical_prime_start:
         years_experience = max(0, age - config.MIN_DEBUT_AGE)
@@ -143,7 +143,8 @@ def _generate_record(rng: random.Random, age: int, current_skill: float, chin: f
     return record
 
 
-def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: date) -> dict:
+def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: date,
+                      age_min: int | None = None, age_max: int | None = None, age_mode: int | None = None) -> dict:
     nationality = rng.choice(list(namedata.NATIONALITIES))
     pool = namedata.NATIONALITIES[nationality]
     first = rng.choice(pool["m_first"] if gender == "M" else pool["f_first"])
@@ -151,7 +152,10 @@ def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: 
     nickname = rng.choice(namedata.NICKNAMES) if rng.random() < 0.6 else None
     hometown = rng.choice(pool["cities"])
 
-    age = round(rng.triangular(config.STARTER_AGE_MIN, config.STARTER_AGE_MAX, config.STARTER_AGE_MODE))
+    age_min = config.STARTER_AGE_MIN if age_min is None else age_min
+    age_max = config.STARTER_AGE_MAX if age_max is None else age_max
+    age_mode = config.STARTER_AGE_MODE if age_mode is None else age_mode
+    age = round(rng.triangular(age_min, age_max, age_mode))
     dob = _random_dob(rng, age, as_of)
 
     potential = round(rng.triangular(config.POTENTIAL_LOW, config.POTENTIAL_HIGH, config.POTENTIAL_MODE))
@@ -161,9 +165,9 @@ def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: 
     prime_start = rng.randint(config.PRIME_START_MIN, config.PRIME_START_MAX)
     prime_end = prime_start + rng.randint(config.PRIME_LENGTH_MIN, config.PRIME_LENGTH_MAX)
 
-    current_skill = potential * _skill_fraction(age, prime_start, prime_end)
+    current_skill = potential * skill_fraction(age, prime_start, prime_end)
     physical_gift = _clamp(potential + rng.gauss(0, config.PHYSICAL_GIFT_NOISE_STDEV))
-    physical_skill = physical_gift * _physical_fraction(age, prime_start, prime_end)
+    physical_skill = physical_gift * physical_fraction(age, prime_start, prime_end)
 
     attrs = {}
     for attr in TECHNIQUE_ATTRS:
@@ -210,6 +214,7 @@ def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: 
         "stance": stance,
         "portrait_filename": None,
         "potential": potential,
+        "physical_gift": round(physical_gift),
         "momentum": round(momentum),
         "prime_start_age": prime_start,
         "prime_end_age": prime_end,

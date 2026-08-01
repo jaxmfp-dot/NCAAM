@@ -109,6 +109,11 @@ def record_bout_result(conn: sqlite3.Connection, bout_id: int, result: dict,
     conn.commit()
 
 
+def set_title_change(conn: sqlite3.Connection, bout_id: int, changed: bool):
+    conn.execute("UPDATE bouts SET title_change = ? WHERE id = ?", (int(changed), bout_id))
+    conn.commit()
+
+
 def refresh_event_status(conn: sqlite3.Connection, event_id: int):
     row = conn.execute(
         "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS done "

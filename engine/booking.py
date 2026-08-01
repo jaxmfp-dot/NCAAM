@@ -8,12 +8,13 @@ import random
 import sqlite3
 
 import config
-from engine import rankings, titles
+from engine import injuries, rankings, retirement, titles
 from engine.fight.simulator import simulate_fight
 from models import event as event_model
 from models import fighter as fighter_model
 
 FINISH_METHODS = ("KO", "TKO", "SUB")
+KO_METHODS = ("KO", "TKO")
 
 
 def book_bout(conn: sqlite3.Connection, event_id: int, fighter_a_id: int, fighter_b_id: int,
@@ -29,6 +30,10 @@ def book_bout(conn: sqlite3.Connection, event_id: int, fighter_a_id: int, fighte
     if fa["weight_class"] != fb["weight_class"] or fa["gender"] != fb["gender"]:
         raise ValueError(f"{fa['name']} ({fa['weight_class']}) and {fb['name']} ({fb['weight_class']}) "
                           f"aren't in the same division")
+    for f in (fa, fb):
+        if f["injury_status"] == "Injured":
+            raise ValueError(f"{f['name']} is injured ({f['injury_description']}, "
+                              f"expected back {f['injury_return_date']}) and can't be booked")
 
     dupe = conn.execute(
         "SELECT id FROM bouts WHERE event_id = ? AND status = 'Scheduled' "
@@ -88,6 +93,14 @@ def _apply_fighter_record(conn: sqlite3.Connection, fighter_id: int, winner_id: 
     )
 
 
+def _apply_ko_loss_damage(conn: sqlite3.Connection, fighter_id: int):
+    """A KO/TKO loss permanently chips away at durability -- accumulated head trauma."""
+    conn.execute(
+        "UPDATE fighters SET chin = MAX(?, chin - ?), toughness = MAX(?, toughness - ?) WHERE id = ?",
+        (config.ATTR_MIN, config.KO_LOSS_CHIN_PENALTY, config.ATTR_MIN, config.KO_LOSS_TOUGHNESS_PENALTY, fighter_id),
+    )
+
+
 def sim_bout(conn: sqlite3.Connection, bout_id: int, seed: int | None = None) -> dict:
     bout = event_model.get_bout(conn, bout_id)
     if bout is None:
@@ -98,6 +111,7 @@ def sim_bout(conn: sqlite3.Connection, bout_id: int, seed: int | None = None) ->
     event = event_model.get_event(conn, bout["event_id"])
     fighter_a = fighter_model.get_fighter(conn, bout["fighter_a_id"])
     fighter_b = fighter_model.get_fighter(conn, bout["fighter_b_id"])
+    rng = random.Random(seed)
 
     a_faced_rank = rankings.snapshot_rank(conn, fighter_b["id"], bout["weight_class"], bout["gender"], event["event_date"])
     b_faced_rank = rankings.snapshot_rank(conn, fighter_a["id"], bout["weight_class"], bout["gender"], event["event_date"])
@@ -105,14 +119,36 @@ def sim_bout(conn: sqlite3.Connection, bout_id: int, seed: int | None = None) ->
     result = simulate_fight(fighter_a, fighter_b, rounds=bout["rounds"], seed=seed)
     winner_fighter_id = {"A": fighter_a["id"], "B": fighter_b["id"]}.get(result["winner_key"])
     result["winner_fighter_id"] = winner_fighter_id
+    is_finish = result["method"] in FINISH_METHODS
 
     event_model.record_bout_result(conn, bout_id, result, a_faced_rank, b_faced_rank)
     _apply_fighter_record(conn, fighter_a["id"], winner_fighter_id, result["method"], bool(bout["is_title_fight"]))
     _apply_fighter_record(conn, fighter_b["id"], winner_fighter_id, result["method"], bool(bout["is_title_fight"]))
+
+    loser_id = None
+    if winner_fighter_id is not None:
+        loser_id = fighter_b["id"] if winner_fighter_id == fighter_a["id"] else fighter_a["id"]
+        if result["method"] in KO_METHODS:
+            _apply_ko_loss_damage(conn, loser_id)
+
+    for fid, fname in ((fighter_a["id"], fighter_a["name"]), (fighter_b["id"], fighter_b["name"])):
+        is_loser = fid == loser_id
+        injury = injuries.maybe_apply_fight_injury(conn, fid, fname, is_loser, is_finish, event["event_date"], rng)
+        if injury:
+            result.setdefault("injuries", []).append(injury)
+
     conn.commit()
 
     if bout["is_title_fight"] and winner_fighter_id is not None:
-        result["title_result"] = titles.resolve_title_bout(conn, bout["title_id"], winner_fighter_id, event["event_date"])
+        title_result = titles.resolve_title_bout(conn, bout["title_id"], winner_fighter_id, event["event_date"])
+        result["title_result"] = title_result
+        event_model.set_title_change(conn, bout_id, title_result["title_changed"])
+
+    if loser_id is not None:
+        loser_row = fighter_model.get_fighter(conn, loser_id)
+        if retirement.should_retire(conn, loser_row, event["event_date"], rng):
+            retirement.retire_fighter(conn, loser_id, event["event_date"])
+            result["retirement"] = {"id": loser_id, "name": loser_row["name"]}
 
     event_model.refresh_event_status(conn, bout["event_id"])
     return result

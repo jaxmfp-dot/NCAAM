@@ -266,3 +266,75 @@ POPULARITY_WIN_DELTA = 2.0
 POPULARITY_FINISH_BONUS = 3.0
 POPULARITY_TITLE_FIGHT_BONUS = 5.0
 POPULARITY_LOSS_DELTA = -1.0
+
+# =========================================================================
+# LIVING UNIVERSE (Phase 4)
+# =========================================================================
+
+# --- Calendar ----------------------------------------------------------
+
+DAYS_PER_WEEK = 7
+WEEKS_PER_YEAR = 52
+
+# --- Yearly development (applied on a fighter's birthday) ----------------
+# Technique attributes drift toward `potential * skill_fraction(age)`; how much
+# of that gap closes in one year depends on work_ethic. Physical attributes
+# drift toward `physical_gift * physical_fraction(age)` the same way, but
+# aren't work-ethic-gated (athleticism rides the age curve more than habits).
+
+DEVELOPMENT_RATE = 0.35          # fraction of the technique gap-to-target closed per year at 100 work_ethic
+DEVELOPMENT_MIN_RATE_FRACTION = 0.25  # even a 0 work_ethic fighter still closes this fraction of DEVELOPMENT_RATE
+DEVELOPMENT_NOISE = 2.5
+PHYSICAL_DEVELOPMENT_RATE = 0.45
+PHYSICAL_DEVELOPMENT_NOISE = 2.5
+
+# durability erodes gradually once a fighter is past prime, on top of any
+# damage-driven decline from KO/TKO losses (below)
+CHIN_AGE_DECLINE_PER_YEAR_PAST_PRIME = 0.5
+TOUGHNESS_AGE_DECLINE_PER_YEAR_PAST_PRIME = 0.4
+
+# a KO/TKO loss permanently chips away at durability -- "punch drunk" over a career
+KO_LOSS_CHIN_PENALTY = 4
+KO_LOSS_TOUGHNESS_PENALTY = 2
+
+# --- Injuries ----------------------------------------------------------
+
+TRAINING_INJURY_BASE_WEEKLY_CHANCE = 0.0015    # at injury_proneness = 50 (roster average)
+TRAINING_INJURY_PRONENESS_SCALE = 0.00003      # additional weekly chance per point of injury_proneness
+TRAINING_INJURY_WEEKS_MIN = 1
+TRAINING_INJURY_WEEKS_MAX = 16
+
+FIGHT_INJURY_BASE_CHANCE_LOSER = 0.06
+FIGHT_INJURY_BASE_CHANCE_WINNER = 0.015
+FIGHT_INJURY_FINISH_MULT = 1.8                 # losing by finish raises injury odds
+FIGHT_INJURY_WEEKS_MIN = 2
+FIGHT_INJURY_WEEKS_MAX = 26
+
+# --- Retirement ----------------------------------------------------------
+# Weighted score -> probability; checked on a fighter's birthday and
+# immediately after any loss.
+
+RETIREMENT_HARD_AGE = 45              # near-guaranteed retirement past this age
+RETIREMENT_AGE_PAST_PRIME_FACTOR = 2.5   # score per year past prime_end_age
+RETIREMENT_LOSING_STREAK_FACTOR = 9.0    # score per fight in an active losing streak
+RETIREMENT_KO_LOSSES_FACTOR = 3.0        # score per career KO/TKO loss (accumulated damage)
+RETIREMENT_MOMENTUM_RELIEF = 0.2         # positive momentum subtracts from the score
+RETIREMENT_SCORE_TO_PROB_SCALE = 0.01    # probability = clamp(score * this, 0, cap)
+RETIREMENT_PROB_CAP = 0.92
+
+# --- Momentum decay ----------------------------------------------------
+
+MOMENTUM_WEEKLY_DECAY = 0.97          # applied to every active fighter each week (fades toward 0 if inactive)
+
+# --- Prospect generation ------------------------------------------------
+
+PROSPECT_AGE_MIN = 19
+PROSPECT_AGE_MAX = 24
+PROSPECT_AGE_MODE = 21
+PROSPECTS_PER_MENS_DIVISION_PER_YEAR = 2
+PROSPECTS_PER_WOMENS_DIVISION_PER_YEAR = 1
+
+# --- Year in review ------------------------------------------------------
+
+BREAKOUT_PROSPECT_MAX_AGE = 25
+BREAKOUT_PROSPECT_MIN_WINS = 2
