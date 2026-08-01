@@ -46,6 +46,8 @@ function renderNav() {
   topnav.innerHTML = "";
   if (slot) {
     topnav.appendChild(el(`<a href="#/roster">Roster</a>`));
+    topnav.appendChild(el(`<a href="#/events">Events</a>`));
+    topnav.appendChild(el(`<a href="#/rankings">Rankings</a>`));
     topnav.appendChild(el(`<a href="#/fight-tester">Fight Tester</a>`));
     topnav.appendChild(el(`<a href="#/">Switch Save</a>`));
   }
@@ -55,6 +57,7 @@ async function router() {
   renderNav();
   const hash = location.hash || "#/";
   const fighterMatch = hash.match(/^#\/fighter\/(\d+)$/);
+  const eventMatch = hash.match(/^#\/events\/(\d+)$/);
   try {
     if (hash === "#/" || hash === "") {
       await renderSaveSelect();
@@ -62,6 +65,12 @@ async function router() {
       await renderRoster();
     } else if (hash === "#/fight-tester") {
       await renderFightTester();
+    } else if (hash === "#/events") {
+      await renderEventsList();
+    } else if (eventMatch) {
+      await renderEventDetail(parseInt(eventMatch[1], 10));
+    } else if (hash === "#/rankings") {
+      await renderRankings();
     } else if (fighterMatch) {
       await renderFighterProfile(parseInt(fighterMatch[1], 10));
     } else {
@@ -245,7 +254,10 @@ function attrRow(label, value) {
 async function renderFighterProfile(id) {
   const slot = currentSlot();
   if (!slot) { location.hash = "#/"; return; }
-  const f = await api(`/api/saves/${slot}/fighters/${id}`);
+  const [f, history] = await Promise.all([
+    api(`/api/saves/${slot}/fighters/${id}`),
+    api(`/api/saves/${slot}/fighters/${id}/history`),
+  ]);
 
   const groupsHtml = Object.entries(ATTR_GROUPS).map(([groupName, attrs]) => `
     <div class="attr-group">
@@ -253,6 +265,24 @@ async function renderFighterProfile(id) {
       ${attrs.map(a => attrRow(ATTR_LABELS[a], f[a])).join("")}
     </div>
   `).join("");
+
+  const historyHtml = history.length ? `
+    <table class="history-table">
+      <thead><tr><th>Date</th><th>Event</th><th>Opponent</th><th>Result</th></tr></thead>
+      <tbody>
+        ${history.map(h => `
+          <tr>
+            <td>${h.event_date}</td>
+            <td>${h.event_name}</td>
+            <td><a href="#/fighter/${h.opponent_id}">${h.opponent_name}</a></td>
+            <td class="outcome-${h.outcome.toLowerCase()}">
+              ${h.outcome} &middot; ${h.method_detail} (R${h.result_round} ${h.result_time})
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  ` : `<div class="empty-state">No fights on record yet.</div>`;
 
   app.innerHTML = `
     <div class="panel">
@@ -270,11 +300,16 @@ async function renderFighterProfile(id) {
             <span class="badge">${f.archetype || "Unclassified"}</span>
             <span class="badge">Potential ${f.potential}</span>
             <span class="badge">Popularity ${f.popularity}</span>
+            <span class="badge">Momentum ${f.momentum}</span>
             <span class="badge">${f.status}</span>
           </div>
         </div>
       </div>
       <div class="attr-groups">${groupsHtml}</div>
+    </div>
+    <div class="panel">
+      <h2>Fight History</h2>
+      ${historyHtml}
     </div>
   `;
 }
@@ -449,4 +484,333 @@ function renderBatchResult(r) {
       </p>
     </div>
   `;
+}
+
+// ---------- Events ----------
+
+async function renderEventsList() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const events = await api(`/api/saves/${slot}/events`);
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Events</h2>
+      <div class="save-list">
+        ${events.length ? events.map(e => `
+          <div class="save-row" data-event-id="${e.id}" style="cursor:pointer;">
+            <div>
+              <div><strong>${e.name}</strong></div>
+              <div class="meta">${e.event_date} ${e.venue ? "&middot; " + e.venue : ""}
+                &middot; ${e.bouts_completed || 0}/${e.bout_count} bouts simmed</div>
+            </div>
+            <span class="badge">${e.status}</span>
+          </div>
+        `).join("") : `<div class="empty-state">No events yet. Create one below.</div>`}
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Create Event</h2>
+      <form class="create-save" id="create-event-form">
+        <input type="text" name="name" placeholder="Event name" required>
+        <input type="date" name="event_date" required>
+        <input type="text" name="venue" placeholder="Venue (optional)">
+        <button class="btn" type="submit">Create</button>
+      </form>
+    </div>
+  `;
+
+  app.querySelectorAll("[data-event-id]").forEach(row => {
+    row.addEventListener("click", () => { location.hash = `#/events/${row.dataset.eventId}`; });
+  });
+
+  document.getElementById("create-event-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const name = form.name.value.trim();
+    const event_date = form.event_date.value;
+    const venue = form.venue.value.trim() || null;
+    if (!name || !event_date) return;
+    try {
+      const ev = await api(`/api/saves/${slot}/events`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, event_date, venue }),
+      });
+      location.hash = `#/events/${ev.id}`;
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
+function boutRowHtml(b) {
+  const badges = [];
+  if (b.is_title_fight) badges.push(`<span class="badge title-badge">${b.is_interim_title_fight ? "Interim Title" : "Title Fight"}</span>`);
+  if (b.is_number_one_contender) badges.push(`<span class="badge">#1 Contender</span>`);
+
+  const resultHtml = b.status === "Completed" ? `
+    <div class="bout-result">
+      <strong>${b.winner_id ? (b.winner_id === b.fighter_a_id ? b.fighter_a_name : b.fighter_b_name) : "Draw"}</strong>
+      wins by ${b.method_detail} &middot; R${b.result_round} ${b.result_time}
+      <button class="btn secondary btn-sm" data-toggle-pbp="${b.id}">View Play-by-play</button>
+      <div class="pbp-container" id="pbp-${b.id}" style="display:none;"></div>
+    </div>
+  ` : `
+    <div class="bout-actions">
+      <button class="btn btn-sm" data-sim-bout="${b.id}">Sim Fight</button>
+      <button class="btn secondary btn-sm" data-remove-bout="${b.id}">Remove</button>
+    </div>
+  `;
+
+  return `
+    <div class="bout-row">
+      <div class="bout-fighters">
+        <span>${b.fighter_a_name} (${b.fighter_a_wins}-${b.fighter_a_losses}-${b.fighter_a_draws})</span>
+        <span class="vs">vs</span>
+        <span>${b.fighter_b_name} (${b.fighter_b_wins}-${b.fighter_b_losses}-${b.fighter_b_draws})</span>
+      </div>
+      <div class="bout-meta">
+        <span class="badge">${b.weight_class}</span>
+        <span class="badge">${b.rounds} Rds</span>
+        ${badges.join("")}
+      </div>
+      ${resultHtml}
+    </div>
+  `;
+}
+
+function renderBoutPlayByPlay(bout) {
+  if (!bout.play_by_play) return "";
+  const statsHtml = statsTableHtml({ fighter_a: bout.stats.fighter_a, fighter_b: bout.stats.fighter_b });
+  const roundsHtml = bout.play_by_play.map((lines, i) => `
+    <div class="pbp-round">
+      <h4>Round ${i + 1}</h4>
+      <div class="pbp">${lines.map(l => `<p>${l}</p>`).join("")}</div>
+      ${bout.scorecards[i] ? scorecardHtml(bout.scorecards[i]) : ""}
+    </div>
+  `).join("");
+  return statsHtml + roundsHtml;
+}
+
+async function renderEventDetail(eventId) {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const [ev, fighters] = await Promise.all([
+    api(`/api/saves/${slot}/events/${eventId}`),
+    api(`/api/saves/${slot}/fighters?sort=name`),
+  ]);
+
+  const grouped = {};
+  fighters.forEach(f => { (grouped[f.weight_class] ||= []).push(f); });
+  const fighterOptionsHtml = Object.entries(grouped).map(([division, list]) => `
+    <optgroup label="${division}">
+      ${list.map(f => `<option value="${f.id}">${f.name}${f.nickname ? ' "' + f.nickname + '"' : ""} (${f.record})</option>`).join("")}
+    </optgroup>
+  `).join("");
+
+  const prelims = ev.bouts.filter(b => b.card_segment === "prelim");
+  const mainCard = ev.bouts.filter(b => b.card_segment === "main");
+  const hasScheduled = ev.bouts.some(b => b.status === "Scheduled");
+
+  app.innerHTML = `
+    <div class="panel">
+      <a href="#/events" class="badge">&larr; Back to Events</a>
+      <h1 style="margin-top:14px;">${ev.name}</h1>
+      <div class="meta-line">${ev.event_date} ${ev.venue ? "&middot; " + ev.venue : ""} &middot; <span class="badge">${ev.status}</span></div>
+      ${hasScheduled ? `<button class="btn" id="sim-card-btn" style="margin-top:12px;">Sim Entire Card</button>` : ""}
+    </div>
+
+    <div class="panel">
+      <h2>Main Card</h2>
+      ${mainCard.length ? mainCard.map(boutRowHtml).join("") : `<div class="empty-state">No main card bouts yet.</div>`}
+    </div>
+    <div class="panel">
+      <h2>Prelims</h2>
+      ${prelims.length ? prelims.map(boutRowHtml).join("") : `<div class="empty-state">No prelim bouts yet.</div>`}
+    </div>
+
+    <div class="panel">
+      <h2>Book a Bout</h2>
+      <form id="add-bout-form" class="add-bout-form">
+        <div class="toolbar">
+          <select name="fighter_a_id" required>${fighterOptionsHtml}</select>
+          <span style="color:var(--text-dim); font-weight:700;">VS</span>
+          <select name="fighter_b_id" required>${fighterOptionsHtml}</select>
+        </div>
+        <div class="toolbar">
+          <select name="card_segment">
+            <option value="main">Main Card</option>
+            <option value="prelim">Prelims</option>
+          </select>
+          <select name="rounds">
+            <option value="3">3 Rounds</option>
+            <option value="5">5 Rounds (Title)</option>
+          </select>
+          <label><input type="checkbox" name="is_title_fight" id="bk-title"> Title Fight</label>
+          <label><input type="checkbox" name="is_interim_title_fight" id="bk-interim" disabled> Interim</label>
+          <label><input type="checkbox" name="is_number_one_contender"> #1 Contender Fight</label>
+        </div>
+        <button class="btn" type="submit">Add to Card</button>
+      </form>
+    </div>
+  `;
+
+  document.getElementById("bk-title").addEventListener("change", (e) => {
+    const interim = document.getElementById("bk-interim");
+    interim.disabled = !e.target.checked;
+    if (!e.target.checked) interim.checked = false;
+  });
+
+  document.getElementById("sim-card-btn")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Simulating...";
+    try {
+      await api(`/api/saves/${slot}/events/${eventId}/sim`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      await renderEventDetail(eventId);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  app.querySelectorAll("[data-sim-bout]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Simulating...";
+      try {
+        await api(`/api/saves/${slot}/bouts/${btn.dataset.simBout}/sim`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+        });
+        await renderEventDetail(eventId);
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.textContent = "Sim Fight";
+      }
+    });
+  });
+
+  app.querySelectorAll("[data-remove-bout]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Remove this bout from the card?")) return;
+      try {
+        await api(`/api/saves/${slot}/events/${eventId}/bouts/${btn.dataset.removeBout}`, { method: "DELETE" });
+        await renderEventDetail(eventId);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+
+  app.querySelectorAll("[data-toggle-pbp]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const boutId = btn.dataset.togglePbp;
+      const container = document.getElementById(`pbp-${boutId}`);
+      if (container.style.display === "none") {
+        if (!container.dataset.loaded) {
+          const bout = ev.bouts.find(b => String(b.id) === String(boutId));
+          container.innerHTML = renderBoutPlayByPlay(bout);
+          container.dataset.loaded = "1";
+        }
+        container.style.display = "block";
+        btn.textContent = "Hide Play-by-play";
+      } else {
+        container.style.display = "none";
+        btn.textContent = "View Play-by-play";
+      }
+    });
+  });
+
+  document.getElementById("add-bout-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fighter_a_id = parseInt(form.fighter_a_id.value, 10);
+    const fighter_b_id = parseInt(form.fighter_b_id.value, 10);
+    if (fighter_a_id === fighter_b_id) { alert("Pick two different fighters."); return; }
+    const body = {
+      fighter_a_id, fighter_b_id,
+      rounds: parseInt(form.rounds.value, 10),
+      card_segment: form.card_segment.value,
+      is_title_fight: form.is_title_fight.checked,
+      is_interim_title_fight: form.is_interim_title_fight.checked,
+      is_number_one_contender: form.is_number_one_contender.checked,
+    };
+    try {
+      await api(`/api/saves/${slot}/events/${eventId}/bouts`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      await renderEventDetail(eventId);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
+// ---------- Rankings ----------
+
+function championCardHtml(champ, label) {
+  if (!champ) return `<div class="champion-card empty">${label}: Vacant</div>`;
+  return `
+    <div class="champion-card">
+      <div class="champion-label">${label}</div>
+      <a href="#/fighter/${champ.id}" class="champion-name">${champ.name}</a>
+      <div class="meta">${champ.wins}-${champ.losses}-${champ.draws}</div>
+    </div>
+  `;
+}
+
+function renderRankingsList(rk, weightClass) {
+  return `
+    <div class="panel">
+      <h2>${weightClass}</h2>
+      <div class="champions-row">
+        ${championCardHtml(rk.champion, "Champion")}
+        ${rk.interim_champion ? championCardHtml(rk.interim_champion, "Interim Champion") : ""}
+      </div>
+      ${rk.contenders.length ? `
+        <table class="stats-table rankings-table">
+          <thead><tr><th>#</th><th>Fighter</th><th>Record</th><th>Points</th></tr></thead>
+          <tbody>
+            ${rk.contenders.map(c => `
+              <tr>
+                <td>${c.rank}</td>
+                <td><a href="#/fighter/${c.fighter.id}">${c.fighter.name}</a></td>
+                <td>${c.fighter.wins}-${c.fighter.losses}-${c.fighter.draws}</td>
+                <td>${c.points}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty-state">No ranked contenders yet -- sim some events!</div>`}
+    </div>
+  `;
+}
+
+async function renderRankings() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const divisions = await api(`/api/saves/${slot}/divisions`);
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Rankings</h2>
+      <div class="toolbar">
+        <select id="rk-division">
+          ${divisions.map(d => `<option value="${d.weight_class}|${d.gender}">${d.weight_class}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <div id="rk-results"></div>
+  `;
+
+  const sel = document.getElementById("rk-division");
+  async function load() {
+    const [wc, gender] = sel.value.split("|");
+    const rk = await api(`/api/saves/${slot}/rankings/${encodeURIComponent(wc)}?gender=${gender}`);
+    document.getElementById("rk-results").innerHTML = renderRankingsList(rk, wc);
+  }
+  sel.addEventListener("change", load);
+  if (divisions.length) await load();
+  else document.getElementById("rk-results").innerHTML = `<div class="empty-state">No active fighters yet.</div>`;
 }

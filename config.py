@@ -234,3 +234,35 @@ JUDGE_SCORE_NOISE = 6.0               # per-judge noise, source of split/majorit
 ROUND_DOMINANT_MARGIN = 25.0          # effectiveness margin (post-noise) that earns a 10-8
 ROUND_DRAW_MARGIN = 3.0               # margin below which a 10-10 round becomes possible
 ROUND_DRAW_CHANCE = 0.06
+
+# =========================================================================
+# BOOKING / RANKINGS (Phase 3)
+# =========================================================================
+
+# --- Ranking points ----------------------------------------------------
+# A fighter's ranking score is the recency-weighted sum of points earned
+# from their most recent wins. Losses/draws contribute nothing (they don't
+# help you climb, but they don't retroactively erase a good win either).
+
+RANKING_WIN_BASE_POINTS = 100.0
+RANKING_FINISH_BONUS = 30.0           # bonus for winning by KO/TKO/SUB instead of decision
+RANKING_CHAMPION_BEATEN_BONUS = 150.0  # opponent was rank 0 (champion, interim counts too)
+RANKING_TOP5_BONUS = 80.0             # opponent was ranked 1-5
+RANKING_TOP10_BONUS = 50.0            # opponent was ranked 6-10
+RANKING_TOP15_BONUS = 25.0            # opponent was ranked 11-15
+RANKING_RECENCY_HALFLIFE_DAYS = 365.0  # a win's point value halves every ~1 year of inactivity
+RANKING_MAX_FIGHTS_CONSIDERED = 10    # only a fighter's most recent N wins count toward ranking
+RANKING_TOP_N = 15
+
+# --- Post-fight momentum / popularity shifts ----------------------------
+
+MOMENTUM_WIN_DELTA = 8
+MOMENTUM_WIN_FINISH_BONUS = 4
+MOMENTUM_LOSS_DELTA = -10
+MOMENTUM_LOSS_FINISH_PENALTY = -4     # losing by finish stings more than a decision loss
+MOMENTUM_DRAW_DELTA = -1
+
+POPULARITY_WIN_DELTA = 2.0
+POPULARITY_FINISH_BONUS = 3.0
+POPULARITY_TITLE_FIGHT_BONUS = 5.0
+POPULARITY_LOSS_DELTA = -1.0

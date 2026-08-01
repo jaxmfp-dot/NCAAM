@@ -90,3 +90,69 @@ CREATE TABLE IF NOT EXISTS fighters (
 CREATE INDEX IF NOT EXISTS idx_fighters_weight_class ON fighters (weight_class);
 CREATE INDEX IF NOT EXISTS idx_fighters_status ON fighters (status);
 CREATE INDEX IF NOT EXISTS idx_fighters_name ON fighters (name);
+
+-- =========================================================================
+-- Booking (Phase 3)
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    event_date      TEXT NOT NULL,          -- ISO date
+    venue           TEXT,
+    status          TEXT NOT NULL DEFAULT 'Scheduled',  -- Scheduled | Completed
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- One row per (division, interim/undisputed) belt. Created lazily the first
+-- time a title fight is booked for that division; champion_id NULL = vacant.
+CREATE TABLE IF NOT EXISTS titles (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    weight_class    TEXT NOT NULL,
+    gender          TEXT NOT NULL CHECK (gender IN ('M', 'F')),
+    is_interim      INTEGER NOT NULL DEFAULT 0,
+    champion_id     INTEGER REFERENCES fighters(id),
+    won_date        TEXT,
+    defenses        INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(weight_class, gender, is_interim)
+);
+
+CREATE TABLE IF NOT EXISTS bouts (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id                INTEGER NOT NULL REFERENCES events(id),
+    bout_order              INTEGER NOT NULL,     -- ascending; highest = main event
+    card_segment            TEXT NOT NULL DEFAULT 'main',  -- 'prelim' | 'main'
+
+    fighter_a_id            INTEGER NOT NULL REFERENCES fighters(id),
+    fighter_b_id            INTEGER NOT NULL REFERENCES fighters(id),
+    weight_class            TEXT NOT NULL,
+    gender                  TEXT NOT NULL CHECK (gender IN ('M', 'F')),
+    rounds                  INTEGER NOT NULL DEFAULT 3,
+
+    is_title_fight          INTEGER NOT NULL DEFAULT 0,
+    title_id                INTEGER REFERENCES titles(id),
+    is_interim_title_fight  INTEGER NOT NULL DEFAULT 0,
+    is_number_one_contender INTEGER NOT NULL DEFAULT 0,
+
+    -- pre-fight opponent rank snapshot (0 = champion, 1-15 = ranked, NULL = unranked)
+    -- a_faced_rank = the rank fighter_a's opponent (fighter_b) held going in, and vice versa
+    a_faced_rank            INTEGER,
+    b_faced_rank            INTEGER,
+
+    status                  TEXT NOT NULL DEFAULT 'Scheduled',  -- Scheduled | Completed
+    winner_id               INTEGER REFERENCES fighters(id),    -- NULL if draw
+    method                  TEXT,        -- KO | TKO | SUB | DEC | DRAW
+    method_detail           TEXT,
+    result_round            INTEGER,
+    result_time             TEXT,
+    stats_json              TEXT,
+    scorecards_json         TEXT,
+    play_by_play_json       TEXT,
+
+    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bouts_event ON bouts (event_id);
+CREATE INDEX IF NOT EXISTS idx_bouts_fighter_a ON bouts (fighter_a_id);
+CREATE INDEX IF NOT EXISTS idx_bouts_fighter_b ON bouts (fighter_b_id);
+CREATE INDEX IF NOT EXISTS idx_titles_division ON titles (weight_class, gender);

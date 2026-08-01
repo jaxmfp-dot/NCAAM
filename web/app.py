@@ -14,10 +14,11 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import config  # noqa: E402
+from engine import booking, rankings, titles  # noqa: E402
 from engine.fight.simulator import simulate_fight, simulate_many  # noqa: E402
 from engine.generator import generate_universe  # noqa: E402
 from engine.importer import import_fighters  # noqa: E402
-from models import db, fighter as fighter_model  # noqa: E402
+from models import db, event as event_model, fighter as fighter_model  # noqa: E402
 
 app = FastAPI(title="MMA Universe Simulator")
 
@@ -48,6 +49,26 @@ class FightTestRequest(BaseModel):
 
 class FightBatchRequest(FightTestRequest):
     n: int = 1000
+
+
+class CreateEventRequest(BaseModel):
+    name: str
+    event_date: str
+    venue: Optional[str] = None
+
+
+class BookBoutRequest(BaseModel):
+    fighter_a_id: int
+    fighter_b_id: int
+    rounds: int = config.DEFAULT_ROUNDS
+    card_segment: Literal["main", "prelim"] = "main"
+    is_title_fight: bool = False
+    is_interim_title_fight: bool = False
+    is_number_one_contender: bool = False
+
+
+class SimRequest(BaseModel):
+    seed: Optional[int] = None
 
 
 @app.get("/api/saves")
@@ -172,6 +193,142 @@ def api_fight_test_batch(slot: str, req: FightBatchRequest):
     finally:
         conn.close()
     return simulate_many(a, b, n=req.n, rounds=req.rounds, seed=req.seed)
+
+
+@app.get("/api/saves/{slot}/events")
+def api_list_events(slot: str):
+    conn = _get_conn(slot)
+    try:
+        return event_model.list_events(conn)
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/events")
+def api_create_event(slot: str, req: CreateEventRequest):
+    conn = _get_conn(slot)
+    try:
+        event_id = event_model.create_event(conn, req.name, req.event_date, req.venue)
+        return event_model.get_event(conn, event_id)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/events/{event_id}")
+def api_get_event(slot: str, event_id: int):
+    conn = _get_conn(slot)
+    try:
+        ev = event_model.get_event(conn, event_id)
+        if ev is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+        ev["bouts"] = event_model.list_bouts(conn, event_id)
+        return ev
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/events/{event_id}/bouts")
+def api_add_bout(slot: str, event_id: int, req: BookBoutRequest):
+    conn = _get_conn(slot)
+    try:
+        if event_model.get_event(conn, event_id) is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+        try:
+            bout_id = booking.book_bout(
+                conn, event_id, req.fighter_a_id, req.fighter_b_id, rounds=req.rounds,
+                card_segment=req.card_segment, is_title_fight=req.is_title_fight,
+                is_interim_title_fight=req.is_interim_title_fight,
+                is_number_one_contender=req.is_number_one_contender,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return event_model.get_bout(conn, bout_id)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/saves/{slot}/events/{event_id}/bouts/{bout_id}")
+def api_remove_bout(slot: str, event_id: int, bout_id: int):
+    conn = _get_conn(slot)
+    try:
+        if not event_model.remove_bout(conn, bout_id):
+            raise HTTPException(status_code=400, detail="Bout can't be removed (already completed, or not found)")
+        return {"removed": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/events/{event_id}/sim")
+def api_sim_event(slot: str, event_id: int, req: SimRequest):
+    conn = _get_conn(slot)
+    try:
+        if event_model.get_event(conn, event_id) is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+        try:
+            results = booking.sim_event(conn, event_id, seed=req.seed)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"results": results}
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/bouts/{bout_id}/sim")
+def api_sim_bout(slot: str, bout_id: int, req: SimRequest):
+    conn = _get_conn(slot)
+    try:
+        try:
+            return booking.sim_bout(conn, bout_id, seed=req.seed)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/rankings/{weight_class}")
+def api_rankings(slot: str, weight_class: str, gender: str = "M", as_of: Optional[str] = None):
+    conn = _get_conn(slot)
+    try:
+        return rankings.compute_rankings(conn, weight_class, gender, as_of_date=as_of)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/titles")
+def api_titles(slot: str):
+    conn = _get_conn(slot)
+    try:
+        return titles.list_titles(conn)
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/titles/{title_id}/vacate")
+def api_vacate_title(slot: str, title_id: int):
+    conn = _get_conn(slot)
+    try:
+        titles.vacate_title(conn, title_id)
+        return {"vacated": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/fighters/{fighter_id}/history")
+def api_fighter_history(slot: str, fighter_id: int):
+    conn = _get_conn(slot)
+    try:
+        return event_model.fighter_history(conn, fighter_id)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/head-to-head")
+def api_head_to_head(slot: str, a: int, b: int):
+    conn = _get_conn(slot)
+    try:
+        return event_model.head_to_head(conn, a, b)
+    finally:
+        conn.close()
 
 
 # SPA static assets + index fallback (mounted last so /api routes take priority)
