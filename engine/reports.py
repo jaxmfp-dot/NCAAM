@@ -4,6 +4,7 @@ import sqlite3
 from datetime import date
 
 import config
+from models import event as event_model
 from models.fighter import compute_age, record_string
 
 
@@ -35,20 +36,7 @@ def year_in_review(conn: sqlite3.Connection, year: int) -> dict:
             "method_detail": d["method_detail"],
         })
 
-    bout_rows = conn.execute(
-        "SELECT b.fighter_a_id, b.fighter_b_id, b.winner_id FROM bouts b "
-        "JOIN events e ON e.id = b.event_id "
-        "WHERE b.status = 'Completed' AND e.event_date BETWEEN ? AND ?",
-        (start, end),
-    ).fetchall()
-    wins, losses = {}, {}
-    for row in bout_rows:
-        a, b, winner = row["fighter_a_id"], row["fighter_b_id"], row["winner_id"]
-        if winner is None:
-            continue
-        loser = b if winner == a else a
-        wins[winner] = wins.get(winner, 0) + 1
-        losses[loser] = losses.get(loser, 0) + 1
+    wins, losses = event_model.results_tally_in_range(conn, start, end)
 
     as_of = date(year, 12, 31)
     breakout = []

@@ -8,13 +8,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
+from fastapi import Body, FastAPI, HTTPException  # noqa: E402
+from fastapi.responses import FileResponse, PlainTextResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import config  # noqa: E402
-from engine import booking, calendar, rankings, reports, titles  # noqa: E402
+from engine import awards, booking, calendar, rankings, recap, reports, titles  # noqa: E402
 from engine.fight.simulator import simulate_fight, simulate_many  # noqa: E402
 from engine.generator import generate_universe  # noqa: E402
 from engine.importer import import_fighters  # noqa: E402
@@ -81,6 +81,14 @@ def api_list_saves():
     return db.list_saves()
 
 
+@app.delete("/api/saves/{slot}")
+def api_delete_save(slot: str):
+    if not db.save_exists(slot):
+        raise HTTPException(status_code=404, detail=f"Save slot '{slot}' not found")
+    db.delete_save(slot)
+    return {"deleted": slot}
+
+
 @app.post("/api/saves")
 def api_create_save(req: CreateSaveRequest):
     slot = db.slugify(req.name)
@@ -132,12 +140,36 @@ def api_list_fighters(
     search: Optional[str] = None,
     status: Optional[str] = "Active",
     sort: str = "name",
+    age_min: Optional[int] = None,
+    age_max: Optional[int] = None,
+    streak_type: Optional[Literal["W", "L"]] = None,
+    min_streak: int = 1,
+    ranked_only: bool = False,
 ):
     conn = _get_conn(slot)
     try:
-        return fighter_model.list_fighters(
-            conn, division=division, gender=gender, search=search, status=status, sort=sort
+        fighters = fighter_model.list_fighters(
+            conn, division=division, gender=gender, search=search, status=status, sort=sort,
+            age_min=age_min, age_max=age_max,
         )
+
+        streaks = event_model.compute_streaks(conn)
+        for f in fighters:
+            f["streak"] = streaks.get(f["id"], {"type": None, "count": 0})
+        if streak_type:
+            fighters = [f for f in fighters if f["streak"]["type"] == streak_type
+                        and f["streak"]["count"] >= min_streak]
+
+        if ranked_only and division and gender:
+            rk = rankings.compute_rankings(conn, division, gender)
+            ranked_ids = {c["fighter"]["id"] for c in rk["contenders"]}
+            if rk["champion"]:
+                ranked_ids.add(rk["champion"]["id"])
+            if rk["interim_champion"]:
+                ranked_ids.add(rk["interim_champion"]["id"])
+            fighters = [f for f in fighters if f["id"] in ranked_ids]
+
+        return fighters
     finally:
         conn.close()
 
@@ -150,6 +182,20 @@ def api_get_fighter(slot: str, fighter_id: int):
         if f is None:
             raise HTTPException(status_code=404, detail="Fighter not found")
         return f
+    finally:
+        conn.close()
+
+
+@app.patch("/api/saves/{slot}/fighters/{fighter_id}")
+def api_update_fighter(slot: str, fighter_id: int, updates: dict = Body(...)):
+    conn = _get_conn(slot)
+    try:
+        if fighter_model.get_fighter(conn, fighter_id) is None:
+            raise HTTPException(status_code=404, detail="Fighter not found")
+        try:
+            return fighter_model.update_fighter(conn, fighter_id, updates)
+        except (ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
     finally:
         conn.close()
 
@@ -228,6 +274,19 @@ def api_get_event(slot: str, event_id: int):
             raise HTTPException(status_code=404, detail="Event not found")
         ev["bouts"] = event_model.list_bouts(conn, event_id)
         return ev
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/events/{event_id}/export")
+def api_export_event(slot: str, event_id: int):
+    conn = _get_conn(slot)
+    try:
+        try:
+            text = recap.export_event_text(conn, event_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        return PlainTextResponse(text)
     finally:
         conn.close()
 
@@ -361,6 +420,15 @@ def api_year_review(slot: str, year: int):
     conn = _get_conn(slot)
     try:
         return reports.year_in_review(conn, year)
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/awards/{year}")
+def api_awards(slot: str, year: int):
+    conn = _get_conn(slot)
+    try:
+        return awards.yearly_awards(conn, year)
     finally:
         conn.close()
 

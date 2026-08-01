@@ -3,6 +3,8 @@
 import sqlite3
 from datetime import date, datetime
 
+import config
+
 STRIKING_ATTRS = [
     "punch_technique", "kick_technique", "knee_technique", "elbow_technique",
     "punch_power", "kick_power", "striking_defense", "head_movement", "chin",
@@ -77,6 +79,48 @@ def insert_fighter(conn: sqlite3.Connection, data: dict) -> int:
     return cur.lastrowid
 
 
+_VALID_WEIGHT_CLASSES = {d["key"] for d in config.WEIGHT_CLASSES}
+_RECORD_INT_FIELDS = set(RECORD_FIELDS) | {"prime_start_age", "prime_end_age"}
+
+
+def update_fighter(conn: sqlite3.Connection, fighter_id: int, updates: dict) -> dict:
+    """In-game editor: validates and clamps a partial update, editable-field whitelist
+    is INSERTABLE_FIELDS (everything the importer/generator can set)."""
+    unknown = set(updates) - set(INSERTABLE_FIELDS)
+    if unknown:
+        raise ValueError(f"Unknown or non-editable field(s): {', '.join(sorted(unknown))}")
+
+    clean = {}
+    for key, value in updates.items():
+        if key in SKILL_ATTRS or key in ("potential", "physical_gift"):
+            clean[key] = max(config.ATTR_MIN, min(config.ATTR_MAX, int(value)))
+        elif key == "momentum":
+            clean[key] = max(config.MOMENTUM_MIN, min(config.MOMENTUM_MAX, int(value)))
+        elif key == "popularity":
+            clean[key] = max(1, min(99, int(value)))
+        elif key == "dob":
+            datetime.strptime(value, "%Y-%m-%d")  # raises ValueError if unparseable
+            clean[key] = value
+        elif key == "gender":
+            if value not in ("M", "F"):
+                raise ValueError("gender must be 'M' or 'F'")
+            clean[key] = value
+        elif key == "weight_class":
+            if value not in _VALID_WEIGHT_CLASSES:
+                raise ValueError(f"Unknown weight_class: {value!r}")
+            clean[key] = value
+        elif key in _RECORD_INT_FIELDS:
+            clean[key] = int(value)
+        else:
+            clean[key] = value
+
+    if clean:
+        set_clause = ", ".join(f"{k} = ?" for k in clean)
+        conn.execute(f"UPDATE fighters SET {set_clause} WHERE id = ?", (*clean.values(), fighter_id))
+        conn.commit()
+    return get_fighter(conn, fighter_id)
+
+
 def row_to_dict(row: sqlite3.Row, as_of: date | None = None) -> dict:
     d = dict(row)
     d["age"] = compute_age(d["dob"], as_of)
@@ -91,6 +135,8 @@ def list_fighters(
     search: str | None = None,
     status: str | None = "Active",
     sort: str = "name",
+    age_min: int | None = None,
+    age_max: int | None = None,
 ) -> list[dict]:
     query = "SELECT * FROM fighters WHERE 1=1"
     params: list = []
@@ -117,7 +163,12 @@ def list_fighters(
     query += f" ORDER BY {sort_columns.get(sort, sort_columns['name'])}"
 
     rows = conn.execute(query, params).fetchall()
-    return [row_to_dict(r) for r in rows]
+    fighters = [row_to_dict(r) for r in rows]
+    if age_min is not None:
+        fighters = [f for f in fighters if f["age"] >= age_min]
+    if age_max is not None:
+        fighters = [f for f in fighters if f["age"] <= age_max]
+    return fighters
 
 
 def get_fighter(conn: sqlite3.Connection, fighter_id: int) -> dict | None:

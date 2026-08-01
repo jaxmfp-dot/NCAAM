@@ -1,6 +1,7 @@
 """Save-slot connection management. Each save is one SQLite file under SAVES_DIR."""
 
 import re
+import shutil
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -57,6 +58,16 @@ def create_save(slot: str, save_name: str, universe_mode: str, start_date: str |
 
     (PORTRAITS_DIR / slot).mkdir(parents=True, exist_ok=True)
     return conn
+
+
+def delete_save(slot: str):
+    """Removes a save's database file and its portrait folder. Irreversible."""
+    path = save_path(slot)
+    if path.exists():
+        path.unlink()
+    portraits_dir = PORTRAITS_DIR / slot
+    if portraits_dir.is_dir():
+        shutil.rmtree(portraits_dir)
 
 
 def get_game_state(conn: sqlite3.Connection) -> dict:

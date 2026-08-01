@@ -23,7 +23,7 @@ def _recency_weight(event_date: str, as_of: date) -> float:
     return 0.5 ** (days / config.RANKING_RECENCY_HALFLIFE_DAYS)
 
 
-def _rank_bonus(rank: int | None) -> float:
+def rank_bonus(rank: int | None) -> float:
     if rank is None:
         return 0.0
     if rank == 0:
@@ -51,7 +51,7 @@ def _fighter_points(conn: sqlite3.Connection, fighter_id: int, as_of: date) -> f
         was_a = row["fighter_a_id"] == fighter_id
         opponent_rank = row["a_faced_rank"] if was_a else row["b_faced_rank"]
         finish_bonus = config.RANKING_FINISH_BONUS if row["method"] in ("KO", "TKO", "SUB") else 0.0
-        points = config.RANKING_WIN_BASE_POINTS + _rank_bonus(opponent_rank) + finish_bonus
+        points = config.RANKING_WIN_BASE_POINTS + rank_bonus(opponent_rank) + finish_bonus
         total += points * _recency_weight(row["event_date"], as_of)
     return total
 

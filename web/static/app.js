@@ -48,6 +48,7 @@ function renderNav() {
     topnav.appendChild(el(`<a href="#/roster">Roster</a>`));
     topnav.appendChild(el(`<a href="#/events">Events</a>`));
     topnav.appendChild(el(`<a href="#/rankings">Rankings</a>`));
+    topnav.appendChild(el(`<a href="#/compare">Compare</a>`));
     topnav.appendChild(el(`<a href="#/calendar">Calendar</a>`));
     topnav.appendChild(el(`<a href="#/hall-of-records">Hall of Records</a>`));
     topnav.appendChild(el(`<a href="#/fight-tester">Fight Tester</a>`));
@@ -73,6 +74,8 @@ async function router() {
       await renderEventDetail(parseInt(eventMatch[1], 10));
     } else if (hash === "#/rankings") {
       await renderRankings();
+    } else if (hash === "#/compare") {
+      await renderCompare();
     } else if (hash === "#/calendar") {
       await renderCalendar();
     } else if (hash === "#/hall-of-records") {
@@ -104,7 +107,10 @@ async function renderSaveSelect() {
               <div><strong>${s.name}</strong></div>
               <div class="meta">${s.fighter_count} fighters &middot; created ${s.created_at} &middot; ${s.universe_mode}</div>
             </div>
-            <button class="btn" data-slot="${s.slot}" data-name="${s.name}">Load</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn" data-slot="${s.slot}" data-name="${s.name}">Load</button>
+              <button class="btn secondary" data-delete-slot="${s.slot}" data-delete-name="${s.name}">Delete</button>
+            </div>
           </div>
         `).join("") : `<div class="empty-state">No saves yet. Create one below.</div>`}
       </div>
@@ -130,6 +136,24 @@ async function renderSaveSelect() {
     btn.addEventListener("click", () => {
       setSlot(btn.dataset.slot, btn.dataset.name);
       location.hash = "#/roster";
+    });
+  });
+
+  app.querySelectorAll("[data-delete-slot]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const slot = btn.dataset.deleteSlot;
+      const name = btn.dataset.deleteName;
+      if (!confirm(`Delete "${name}" permanently? This can't be undone.`)) return;
+      try {
+        await api(`/api/saves/${slot}`, { method: "DELETE" });
+        if (currentSlot() === slot) {
+          localStorage.removeItem("mma_slot");
+          localStorage.removeItem("mma_slot_name");
+        }
+        await renderSaveSelect();
+      } catch (err) {
+        alert(err.message);
+      }
     });
   });
 
@@ -179,6 +203,17 @@ async function renderRoster() {
         <option value="age">Sort: Youngest</option>
       </select>
     </div>
+    <div class="toolbar">
+      <label class="filter-label">Age <input type="number" id="f-age-min" placeholder="min" min="18" max="60" style="width:60px;"></label>
+      <label class="filter-label">&ndash; <input type="number" id="f-age-max" placeholder="max" min="18" max="60" style="width:60px;"></label>
+      <select id="f-streak">
+        <option value="">Any Streak</option>
+        <option value="W">On a Win Streak</option>
+        <option value="L">On a Losing Streak</option>
+      </select>
+      <input type="number" id="f-streak-min" value="2" min="1" max="20" style="width:60px;" title="Minimum streak length">
+      <label class="filter-label"><input type="checkbox" id="f-ranked-only"> Ranked Only</label>
+    </div>
     <div id="roster-grid" class="roster-grid"><div class="empty-state">Loading...</div></div>
   `;
 
@@ -186,6 +221,11 @@ async function renderRoster() {
   const divisionSel = document.getElementById("f-division");
   const searchInput = document.getElementById("f-search");
   const sortSel = document.getElementById("f-sort");
+  const ageMinInput = document.getElementById("f-age-min");
+  const ageMaxInput = document.getElementById("f-age-max");
+  const streakSel = document.getElementById("f-streak");
+  const streakMinInput = document.getElementById("f-streak-min");
+  const rankedOnlyCheckbox = document.getElementById("f-ranked-only");
 
   let searchTimer;
   async function load() {
@@ -194,9 +234,16 @@ async function renderRoster() {
       const [wc, gender] = divisionSel.value.split("|");
       params.set("division", wc);
       params.set("gender", gender);
+      if (rankedOnlyCheckbox.checked) params.set("ranked_only", "true");
     }
     if (searchInput.value.trim()) params.set("search", searchInput.value.trim());
     params.set("sort", sortSel.value);
+    if (ageMinInput.value) params.set("age_min", ageMinInput.value);
+    if (ageMaxInput.value) params.set("age_max", ageMaxInput.value);
+    if (streakSel.value) {
+      params.set("streak_type", streakSel.value);
+      params.set("min_streak", streakMinInput.value || "1");
+    }
 
     const fighters = await api(`/api/saves/${slot}/fighters?${params.toString()}`);
     grid.innerHTML = fighters.length ? fighters.map(f => `
@@ -206,6 +253,8 @@ async function renderRoster() {
           <div class="name">${f.name}</div>
           ${f.nickname ? `<div class="nickname">"${f.nickname}"</div>` : ""}
           <div class="sub">${f.weight_class} &middot; ${f.record} &middot; age ${f.age}</div>
+          ${f.streak && f.streak.type && f.streak.count >= 2
+            ? `<div class="streak-badge streak-${f.streak.type}">${f.streak.type}${f.streak.count}</div>` : ""}
         </div>
       </div>
     `).join("") : `<div class="empty-state">No fighters match those filters.</div>`;
@@ -215,11 +264,14 @@ async function renderRoster() {
     });
   }
 
-  divisionSel.addEventListener("change", load);
-  sortSel.addEventListener("change", load);
-  searchInput.addEventListener("input", () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(load, 250);
+  [divisionSel, sortSel, streakSel, streakMinInput, rankedOnlyCheckbox].forEach(el => {
+    el.addEventListener("change", load);
+  });
+  [searchInput, ageMinInput, ageMaxInput].forEach(el => {
+    el.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(load, 300);
+    });
   });
 
   await load();
@@ -257,13 +309,59 @@ function attrRow(label, value) {
     </div>`;
 }
 
-async function renderFighterProfile(id) {
+async function renderFighterProfile(id, editMode = false) {
   const slot = currentSlot();
   if (!slot) { location.hash = "#/"; return; }
   const [f, history] = await Promise.all([
     api(`/api/saves/${slot}/fighters/${id}`),
     api(`/api/saves/${slot}/fighters/${id}/history`),
   ]);
+
+  if (editMode) {
+    app.innerHTML = `
+      <div class="panel">
+        <a href="#/fighter/${id}" class="badge" id="edit-cancel-top">&larr; Cancel Edit</a>
+        <h1 style="margin-top:14px;">Edit ${f.name}</h1>
+      </div>
+      ${renderFighterEditForm(f)}
+    `;
+    document.getElementById("edit-cancel-top").addEventListener("click", (e) => {
+      e.preventDefault();
+      renderFighterProfile(id, false);
+    });
+    document.getElementById("edit-cancel-btn").addEventListener("click", () => renderFighterProfile(id, false));
+    document.getElementById("fighter-edit-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updates = {};
+      for (const [key, value] of fd.entries()) {
+        if (key === "division") {
+          const [wc, gender] = value.split("|");
+          updates.weight_class = wc;
+          updates.gender = gender;
+        } else if (OPTIONAL_TEXT_FIELDS.has(key) && value.trim() === "") {
+          updates[key] = null;
+        } else {
+          updates[key] = value;
+        }
+      }
+      const submitBtn = e.target.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving...";
+      try {
+        await api(`/api/saves/${slot}/fighters/${id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+        await renderFighterProfile(id, false);
+      } catch (err) {
+        alert(err.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save Changes";
+      }
+    });
+    return;
+  }
 
   const groupsHtml = Object.entries(ATTR_GROUPS).map(([groupName, attrs]) => `
     <div class="attr-group">
@@ -293,6 +391,7 @@ async function renderFighterProfile(id) {
   app.innerHTML = `
     <div class="panel">
       <a href="#/roster" class="badge">&larr; Back to Roster</a>
+      <a href="#" class="badge" id="edit-fighter-btn" style="float:right;">Edit Fighter</a>
       <div class="profile-header" style="margin-top:14px;">
         <div class="profile-portrait-holder">${portraitTag(slot, f.id, f.name, "profile-portrait")}</div>
         <div class="profile-title">
@@ -317,6 +416,99 @@ async function renderFighterProfile(id) {
       <h2>Fight History</h2>
       ${historyHtml}
     </div>
+  `;
+
+  document.getElementById("edit-fighter-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    renderFighterProfile(id, true);
+  });
+}
+
+// ---------- Fighter editor ----------
+
+const ALL_DIVISIONS = [
+  { key: "Flyweight", gender: "M" }, { key: "Bantamweight", gender: "M" }, { key: "Featherweight", gender: "M" },
+  { key: "Lightweight", gender: "M" }, { key: "Welterweight", gender: "M" }, { key: "Middleweight", gender: "M" },
+  { key: "Light Heavyweight", gender: "M" }, { key: "Heavyweight", gender: "M" },
+  { key: "Women's Strawweight", gender: "F" }, { key: "Women's Flyweight", gender: "F" },
+  { key: "Women's Bantamweight", gender: "F" },
+];
+const OPTIONAL_TEXT_FIELDS = new Set([
+  "nickname", "nationality", "hometown", "archetype", "height_in", "reach_in", "portrait_filename",
+]);
+const RECORD_EDIT_FIELDS = [
+  "wins", "losses", "draws", "no_contests",
+  "wins_ko", "wins_sub", "wins_dec", "losses_ko", "losses_sub", "losses_dec",
+];
+
+function editFieldRow(label, name, value, type = "number", extra = "") {
+  return `
+    <div class="edit-row">
+      <label>${label}</label>
+      <input type="${type}" name="${name}" value="${value ?? ""}" ${extra}>
+    </div>
+  `;
+}
+
+function renderFighterEditForm(f) {
+  const groupsHtml = Object.entries(ATTR_GROUPS).map(([groupName, attrs]) => `
+    <div class="attr-group">
+      <h3>${groupName}</h3>
+      ${attrs.map(a => editFieldRow(ATTR_LABELS[a], a, f[a], "number", 'min="1" max="99"')).join("")}
+    </div>
+  `).join("");
+
+  const divisionOptions = ALL_DIVISIONS.map(d => `
+    <option value="${d.key}|${d.gender}" ${f.weight_class === d.key && f.gender === d.gender ? "selected" : ""}>
+      ${d.key}
+    </option>
+  `).join("");
+  const stanceOptions = ["Orthodox", "Southpaw", "Switch"].map(s =>
+    `<option ${f.stance === s ? "selected" : ""}>${s}</option>`).join("");
+  const statusOptions = ["Active", "Retired"].map(s =>
+    `<option ${f.status === s ? "selected" : ""}>${s}</option>`).join("");
+
+  return `
+    <form id="fighter-edit-form">
+      <div class="panel">
+        <h3>Identity</h3>
+        <div class="edit-grid">
+          ${editFieldRow("Name", "name", f.name, "text", "required")}
+          ${editFieldRow("Nickname", "nickname", f.nickname || "", "text")}
+          ${editFieldRow("Date of Birth", "dob", f.dob, "date")}
+          ${editFieldRow("Nationality", "nationality", f.nationality || "", "text")}
+          ${editFieldRow("Hometown", "hometown", f.hometown || "", "text")}
+          <div class="edit-row"><label>Division</label><select name="division">${divisionOptions}</select></div>
+          ${editFieldRow("Height (in)", "height_in", f.height_in || "", "number", 'step="0.1"')}
+          ${editFieldRow("Reach (in)", "reach_in", f.reach_in || "", "number", 'step="0.1"')}
+          <div class="edit-row"><label>Stance</label><select name="stance">${stanceOptions}</select></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Career</h3>
+        <div class="edit-grid">
+          ${editFieldRow("Potential", "potential", f.potential, "number", 'min="1" max="99"')}
+          ${editFieldRow("Physical Gift", "physical_gift", f.physical_gift, "number", 'min="1" max="99"')}
+          ${editFieldRow("Momentum", "momentum", f.momentum, "number", 'min="-20" max="20"')}
+          ${editFieldRow("Popularity", "popularity", f.popularity, "number", 'min="1" max="99"')}
+          ${editFieldRow("Prime Start Age", "prime_start_age", f.prime_start_age, "number")}
+          ${editFieldRow("Prime End Age", "prime_end_age", f.prime_end_age, "number")}
+          ${editFieldRow("Archetype", "archetype", f.archetype || "", "text")}
+          <div class="edit-row"><label>Status</label><select name="status">${statusOptions}</select></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Record</h3>
+        <div class="edit-grid">
+          ${RECORD_EDIT_FIELDS.map(name => editFieldRow(name.replace(/_/g, " "), name, f[name], "number", 'min="0"')).join("")}
+        </div>
+      </div>
+      <div class="attr-groups">${groupsHtml}</div>
+      <div class="panel">
+        <button class="btn" type="submit">Save Changes</button>
+        <button class="btn secondary" type="button" id="edit-cancel-btn">Cancel</button>
+      </div>
+    </form>
   `;
 }
 
@@ -849,6 +1041,35 @@ function renderCalendarSummary(summary) {
   return `<div class="panel">${lines.join("")}</div>`;
 }
 
+function renderAwardsHtml(yearAwards) {
+  const foty = yearAwards.fighter_of_the_year;
+  const fotyHtml = foty ? `
+    <li><a href="#/fighter/${foty.id}">${foty.name}</a> &mdash; ${foty.weight_class},
+      ${foty.wins_this_year}-${foty.losses_this_year} this year
+      ${foty.won_title_this_year ? "&middot; won a title" : ""}</li>
+  ` : `<li class="award-none">No award given.</li>`;
+
+  function finishAwardLi(award) {
+    if (!award) return `<li class="award-none">No award given.</li>`;
+    return `<li><strong>${award.winner_name}</strong> def. ${award.loser_name}
+      &mdash; ${award.event_name}, ${award.event_date} (R${award.round} ${award.time})</li>`;
+  }
+
+  return `
+    <h3>${yearAwards.year} Awards</h3>
+    <ul>
+      <li class="award-category">Fighter of the Year</li>
+      ${fotyHtml}
+      <li class="award-category">Knockout of the Year</li>
+      ${finishAwardLi(yearAwards.ko_of_the_year)}
+      <li class="award-category">Submission of the Year</li>
+      ${finishAwardLi(yearAwards.submission_of_the_year)}
+      <li class="award-category">Fight of the Year</li>
+      ${finishAwardLi(yearAwards.fight_of_the_year)}
+    </ul>
+  `;
+}
+
 function renderYearReviewHtml(review) {
   const titleHtml = review.title_changes.length ? `
     <ul>${review.title_changes.map(t => `
@@ -935,8 +1156,11 @@ async function renderCalendar() {
     const resultsEl = document.getElementById("yr-results");
     resultsEl.innerHTML = `<div class="empty-state">Loading...</div>`;
     try {
-      const review = await api(`/api/saves/${slot}/year-review/${year}`);
-      resultsEl.innerHTML = renderYearReviewHtml(review);
+      const [review, yearAwards] = await Promise.all([
+        api(`/api/saves/${slot}/year-review/${year}`),
+        api(`/api/saves/${slot}/awards/${year}`),
+      ]);
+      resultsEl.innerHTML = renderAwardsHtml(yearAwards) + renderYearReviewHtml(review);
     } catch (err) {
       resultsEl.innerHTML = `<div class="error-state">${err.message}</div>`;
     }
@@ -972,5 +1196,88 @@ async function renderHallOfRecords() {
 
   app.querySelectorAll("[data-id]").forEach(card => {
     card.addEventListener("click", () => { location.hash = `#/fighter/${card.dataset.id}`; });
+  });
+}
+
+// ---------- Compare ----------
+
+function compareAttrRow(label, valueA, valueB) {
+  const aClass = valueA > valueB ? "compare-better" : valueA < valueB ? "compare-worse" : "";
+  const bClass = valueB > valueA ? "compare-better" : valueB < valueA ? "compare-worse" : "";
+  return `
+    <div class="compare-row">
+      <div class="compare-value ${aClass}">${valueA}</div>
+      <div class="compare-label">${label}</div>
+      <div class="compare-value ${bClass}">${valueB}</div>
+    </div>
+  `;
+}
+
+async function renderCompare() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const fighters = await api(`/api/saves/${slot}/fighters?sort=name`);
+
+  const grouped = {};
+  fighters.forEach(f => { (grouped[f.weight_class] ||= []).push(f); });
+  function optionsHtml(selectedId) {
+    return Object.entries(grouped).map(([division, list]) => `
+      <optgroup label="${division}">
+        ${list.map(f => `<option value="${f.id}" ${f.id === selectedId ? "selected" : ""}>${f.name} (${f.record})</option>`).join("")}
+      </optgroup>
+    `).join("");
+  }
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Compare Fighters</h2>
+      <div class="toolbar">
+        <select id="cmp-a">${optionsHtml(fighters[0]?.id)}</select>
+        <span style="color:var(--text-dim); font-weight:700;">VS</span>
+        <select id="cmp-b">${optionsHtml(fighters[1]?.id)}</select>
+        <button class="btn" id="cmp-btn">Compare</button>
+      </div>
+    </div>
+    <div id="cmp-results"></div>
+  `;
+
+  document.getElementById("cmp-btn").addEventListener("click", async () => {
+    const aId = parseInt(document.getElementById("cmp-a").value, 10);
+    const bId = parseInt(document.getElementById("cmp-b").value, 10);
+    const resultsEl = document.getElementById("cmp-results");
+    if (aId === bId) {
+      resultsEl.innerHTML = `<div class="error-state">Pick two different fighters.</div>`;
+      return;
+    }
+    resultsEl.innerHTML = `<div class="empty-state">Loading...</div>`;
+    const [a, b] = await Promise.all([
+      api(`/api/saves/${slot}/fighters/${aId}`),
+      api(`/api/saves/${slot}/fighters/${bId}`),
+    ]);
+
+    const groupsHtml = Object.entries(ATTR_GROUPS).map(([groupName, attrs]) => `
+      <div class="attr-group">
+        <h3>${groupName}</h3>
+        ${attrs.map(attr => compareAttrRow(ATTR_LABELS[attr], a[attr], b[attr])).join("")}
+      </div>
+    `).join("");
+
+    resultsEl.innerHTML = `
+      <div class="panel">
+        <div class="compare-header">
+          <div class="compare-fighter">
+            ${portraitTag(slot, a.id, a.name, "compare-portrait")}
+            <h3><a href="#/fighter/${a.id}">${a.name}</a></h3>
+            <div class="meta-line">${a.weight_class} &middot; ${a.record} &middot; age ${a.age}</div>
+          </div>
+          <div class="compare-fighter">
+            ${portraitTag(slot, b.id, b.name, "compare-portrait")}
+            <h3><a href="#/fighter/${b.id}">${b.name}</a></h3>
+            <div class="meta-line">${b.weight_class} &middot; ${b.record} &middot; age ${b.age}</div>
+          </div>
+        </div>
+        <div class="compare-groups">${groupsHtml}</div>
+      </div>
+    `;
   });
 }

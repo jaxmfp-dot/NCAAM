@@ -152,6 +152,65 @@ def fighter_history(conn: sqlite3.Connection, fighter_id: int) -> list[dict]:
     return out
 
 
+def compute_streaks(conn: sqlite3.Connection) -> dict[int, dict]:
+    """Current win/loss streak per fighter, e.g. {fighter_id: {'type': 'W', 'count': 3}}.
+    A draw or no fights on record resets/omits the streak. Single pass over all completed
+    bouts in chronological order -- O(bouts), not O(fighters * bouts)."""
+    rows = conn.execute(
+        "SELECT b.fighter_a_id, b.fighter_b_id, b.winner_id FROM bouts b "
+        "JOIN events e ON e.id = b.event_id "
+        "WHERE b.status = 'Completed' ORDER BY e.event_date ASC, b.bout_order ASC"
+    ).fetchall()
+
+    sequences: dict[int, list[str]] = {}
+    for row in rows:
+        a, b, winner = row["fighter_a_id"], row["fighter_b_id"], row["winner_id"]
+        for fighter_id, outcome in (
+            (a, "W" if winner == a else ("D" if winner is None else "L")),
+            (b, "W" if winner == b else ("D" if winner is None else "L")),
+        ):
+            sequences.setdefault(fighter_id, []).append(outcome)
+
+    streaks = {}
+    for fighter_id, seq in sequences.items():
+        last = seq[-1]
+        if last == "D":
+            streaks[fighter_id] = {"type": None, "count": 0}
+            continue
+        count = 0
+        for outcome in reversed(seq):
+            if outcome != last:
+                break
+            count += 1
+        streaks[fighter_id] = {"type": last, "count": count}
+    return streaks
+
+
+def bouts_in_range(conn: sqlite3.Connection, start_date: str, end_date: str) -> list[dict]:
+    rows = conn.execute(
+        _BOUT_COLUMNS + ", e.name AS event_name, e.event_date AS event_date "
+        + _BOUT_FROM
+        + "JOIN events e ON e.id = b.event_id "
+          "WHERE b.status = 'Completed' AND e.event_date BETWEEN ? AND ? "
+          "ORDER BY e.event_date ASC, b.bout_order ASC",
+        (start_date, end_date),
+    ).fetchall()
+    return [_bout_row_to_dict(r) for r in rows]
+
+
+def results_tally_in_range(conn: sqlite3.Connection, start_date: str, end_date: str) -> tuple[dict, dict]:
+    """Returns (wins_by_fighter_id, losses_by_fighter_id) counting only decided bouts."""
+    wins, losses = {}, {}
+    for bout in bouts_in_range(conn, start_date, end_date):
+        winner = bout["winner_id"]
+        if winner is None:
+            continue
+        loser = bout["fighter_b_id"] if winner == bout["fighter_a_id"] else bout["fighter_a_id"]
+        wins[winner] = wins.get(winner, 0) + 1
+        losses[loser] = losses.get(loser, 0) + 1
+    return wins, losses
+
+
 def head_to_head(conn: sqlite3.Connection, fighter_a_id: int, fighter_b_id: int) -> dict:
     rows = conn.execute(
         _BOUT_COLUMNS + ", e.name AS event_name, e.event_date AS event_date "
