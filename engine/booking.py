@@ -34,6 +34,8 @@ def book_bout(conn: sqlite3.Connection, event_id: int, fighter_a_id: int, fighte
         if f["injury_status"] == "Injured":
             raise ValueError(f"{f['name']} is injured ({f['injury_description']}, "
                               f"expected back {f['injury_return_date']}) and can't be booked")
+        if f.get("promotion", "UFC") != "UFC":
+            raise ValueError(f"{f['name']} is not on the UFC roster ({f['promotion']}) -- sign them first")
 
     dupe = conn.execute(
         "SELECT id FROM bouts WHERE event_id = ? AND status = 'Scheduled' "

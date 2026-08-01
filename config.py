@@ -346,3 +346,21 @@ PROSPECTS_PER_WOMENS_DIVISION_PER_YEAR = 1
 
 BREAKOUT_PROSPECT_MAX_AGE = 25
 BREAKOUT_PROSPECT_MIN_WINS = 2
+
+# --- Free agency / off-screen fights -----------------------------------
+# Fighters outside the UFC keep fighting "off-screen": each week an active,
+# healthy non-UFC fighter has a small chance of having taken a fight, resolved
+# with the real fight engine when a same-division non-UFC opponent exists, or
+# against a synthetic regional opponent otherwise. Only records/momentum update
+# (no bout rows -- these fights happen outside the promotion you control).
+
+OFFSCREEN_WEEKLY_FIGHT_CHANCE = 0.05      # ~2.6 fights/year per non-UFC fighter
+OFFSCREEN_REGIONAL_OPPONENT_SKILL = 55.0  # baseline skill of a synthetic regional opponent
+FREE_AGENT_LIST_SIZE = 20
+
+# free-agent judgment score weights: what "the game thinks" a fighter is worth
+FA_SCORE_SKILL_WEIGHT = 0.6       # core skill average
+FA_SCORE_POTENTIAL_WEIGHT = 0.25
+FA_SCORE_WINRATE_WEIGHT = 25.0    # scaled by career win rate
+FA_SCORE_MOMENTUM_WEIGHT = 0.3
+FA_SCORE_YOUTH_BONUS_PER_YEAR = 0.6  # bonus per year under 30 (age curve upside)

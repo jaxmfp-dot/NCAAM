@@ -143,6 +143,7 @@ def normalize_fighter(record: dict, rng: random.Random, as_of: date | None = Non
         "stance": record.get("stance") or None,
         "portrait_filename": record.get("portrait_filename") or None,
         "contract_status": record.get("contract_status") or "Signed",
+        "promotion": record.get("promotion") or "UFC",
         "status": record.get("status") or "Active",
         "archetype": record.get("archetype") or None,
     }

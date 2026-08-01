@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 import config  # noqa: E402
-from engine import awards, booking, calendar, rankings, recap, reports, titles  # noqa: E402
+from engine import awards, booking, calendar, freeagency, rankings, realimport, recap, reports, titles  # noqa: E402
 from engine.fight.simulator import simulate_fight, simulate_many  # noqa: E402
 from engine.generator import generate_universe  # noqa: E402
 from engine.importer import import_fighters  # noqa: E402
@@ -35,7 +35,7 @@ def _get_conn(slot: str):
 
 class CreateSaveRequest(BaseModel):
     name: str
-    mode: Literal["generate", "import", "empty"] = "generate"
+    mode: Literal["generate", "import", "real", "empty"] = "generate"
     seed: Optional[int] = None
     import_filename: Optional[str] = None
 
@@ -104,6 +104,15 @@ def api_create_save(req: CreateSaveRequest):
             fighter_model.insert_fighter(conn, f)
         conn.commit()
         result["fighters_created"] = len(fighters)
+    elif req.mode == "real":
+        state = db.get_game_state(conn)
+        summaries = realimport.import_all_real(conn, state["current_date"], seed=req.seed)
+        if not summaries:
+            conn.close()
+            db.delete_save(slot)
+            raise HTTPException(status_code=400, detail="No division files found in data/real/")
+        result["divisions"] = summaries
+        result["fighters_created"] = sum(s["imported"] for s in summaries)
     elif req.mode == "import":
         source = (IMPORT_DIR / req.import_filename) if req.import_filename else None
         if source is None:
@@ -182,6 +191,40 @@ def api_get_fighter(slot: str, fighter_id: int):
         if f is None:
             raise HTTPException(status_code=404, detail="Fighter not found")
         return f
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/fighters/{fighter_id}/cut")
+def api_cut_fighter(slot: str, fighter_id: int):
+    conn = _get_conn(slot)
+    try:
+        try:
+            return freeagency.cut_fighter(conn, fighter_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.post("/api/saves/{slot}/fighters/{fighter_id}/sign")
+def api_sign_fighter(slot: str, fighter_id: int):
+    conn = _get_conn(slot)
+    try:
+        try:
+            return freeagency.sign_fighter(conn, fighter_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/saves/{slot}/free-agents")
+def api_free_agents(slot: str):
+    conn = _get_conn(slot)
+    try:
+        state = db.get_game_state(conn)
+        return freeagency.top_free_agents(conn, state["current_date"])
     finally:
         conn.close()
 

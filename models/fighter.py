@@ -21,7 +21,7 @@ MENTAL_ATTRS = [
 ]
 CAREER_ATTRS = [
     "potential", "physical_gift", "momentum", "prime_start_age", "prime_end_age", "popularity",
-    "contract_status", "status", "archetype",
+    "contract_status", "promotion", "status", "archetype",
 ]
 
 ATTRIBUTE_GROUPS = {
@@ -46,7 +46,7 @@ RECORD_FIELDS = [
 INSERTABLE_FIELDS = (
     IDENTITY_FIELDS + RECORD_FIELDS + SKILL_ATTRS
     + ["potential", "physical_gift", "momentum", "prime_start_age", "prime_end_age", "popularity",
-       "contract_status", "status", "archetype"]
+       "contract_status", "promotion", "status", "archetype"]
 )
 
 
@@ -149,12 +149,16 @@ def list_fighters(
     sort: str = "name",
     age_min: int | None = None,
     age_max: int | None = None,
+    promotion: str | None = None,
 ) -> list[dict]:
     query = "SELECT * FROM fighters WHERE 1=1"
     params: list = []
     if division:
         query += " AND weight_class = ?"
         params.append(division)
+    if promotion:
+        query += " AND promotion = ?"
+        params.append(promotion)
     if gender:
         query += " AND gender = ?"
         params.append(gender)

@@ -220,6 +220,7 @@ def generate_fighter(rng: random.Random, weight_class: str, gender: str, as_of: 
         "prime_end_age": prime_end,
         "popularity": round(popularity),
         "contract_status": "Signed",
+        "promotion": "UFC",
         "status": "Active",
         "archetype": archetype,
         **attrs,

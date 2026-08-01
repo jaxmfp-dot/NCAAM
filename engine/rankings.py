@@ -77,7 +77,8 @@ def compute_rankings(conn: sqlite3.Connection, weight_class: str, gender: str,
     champion_ids = {f["id"] for f in (champion, interim_champion) if f}
 
     roster = conn.execute(
-        "SELECT * FROM fighters WHERE weight_class = ? AND gender = ? AND status = 'Active'",
+        "SELECT * FROM fighters WHERE weight_class = ? AND gender = ? AND status = 'Active' "
+        "AND promotion = 'UFC'",
         (weight_class, gender),
     ).fetchall()
 

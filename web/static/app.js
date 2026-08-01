@@ -48,6 +48,7 @@ function renderNav() {
     topnav.appendChild(el(`<a href="#/roster">Roster</a>`));
     topnav.appendChild(el(`<a href="#/events">Events</a>`));
     topnav.appendChild(el(`<a href="#/rankings">Rankings</a>`));
+    topnav.appendChild(el(`<a href="#/free-agents">Free Agents</a>`));
     topnav.appendChild(el(`<a href="#/compare">Compare</a>`));
     topnav.appendChild(el(`<a href="#/calendar">Calendar</a>`));
     topnav.appendChild(el(`<a href="#/hall-of-records">Hall of Records</a>`));
@@ -74,6 +75,8 @@ async function router() {
       await renderEventDetail(parseInt(eventMatch[1], 10));
     } else if (hash === "#/rankings") {
       await renderRankings();
+    } else if (hash === "#/free-agents") {
+      await renderFreeAgents();
     } else if (hash === "#/compare") {
       await renderCompare();
     } else if (hash === "#/calendar") {
@@ -120,6 +123,7 @@ async function renderSaveSelect() {
       <form class="create-save">
         <input type="text" name="name" placeholder="Universe name" required>
         <select name="mode">
+          <option value="real">Real universe (data/real/ divisions)</option>
           <option value="generate">Generate ~200 fictional fighters</option>
           <option value="import">Import from data/import/</option>
         </select>
@@ -402,12 +406,21 @@ async function renderFighterProfile(id, editMode = false) {
           <div class="meta-line">Age ${f.age} &middot; ${f.nationality || "Unknown"} &middot; ${f.hometown || "Unknown"}</div>
           <div class="meta-line">${f.height_in ? f.height_in + '" tall' : ""} ${f.reach_in ? "&middot; " + f.reach_in + '" reach' : ""} ${f.stance ? "&middot; " + f.stance : ""}</div>
           <div style="margin-top:10px;">
+            <span class="badge ${f.promotion === "UFC" ? "title-badge" : ""}">${f.promotion}</span>
             <span class="badge">${f.archetype || "Unclassified"}</span>
             <span class="badge">Potential ${f.potential}</span>
             <span class="badge">Popularity ${f.popularity}</span>
             <span class="badge">Momentum ${f.momentum}</span>
             <span class="badge">${f.status}</span>
+            ${f.injury_status === "Injured" ? `<span class="badge" style="color:var(--red);">Injured until ${f.injury_return_date}</span>` : ""}
           </div>
+          ${f.status === "Active" ? `
+            <div style="margin-top:10px;">
+              ${f.promotion === "UFC"
+                ? `<button class="btn secondary btn-sm" id="cut-fighter-btn">Cut from Roster</button>`
+                : `<button class="btn btn-sm" id="sign-fighter-btn">Sign to UFC</button>`}
+            </div>
+          ` : ""}
         </div>
       </div>
       <div class="attr-groups">${groupsHtml}</div>
@@ -421,6 +434,21 @@ async function renderFighterProfile(id, editMode = false) {
   document.getElementById("edit-fighter-btn").addEventListener("click", (e) => {
     e.preventDefault();
     renderFighterProfile(id, true);
+  });
+
+  document.getElementById("cut-fighter-btn")?.addEventListener("click", async () => {
+    if (!confirm(`Cut ${f.name} from the UFC roster? They'll become a free agent (any titles are vacated).`)) return;
+    try {
+      await api(`/api/saves/${slot}/fighters/${id}/cut`, { method: "POST" });
+      await renderFighterProfile(id, false);
+    } catch (err) { alert(err.message); }
+  });
+
+  document.getElementById("sign-fighter-btn")?.addEventListener("click", async () => {
+    try {
+      await api(`/api/saves/${slot}/fighters/${id}/sign`, { method: "POST" });
+      await renderFighterProfile(id, false);
+    } catch (err) { alert(err.message); }
   });
 }
 
@@ -1279,5 +1307,51 @@ async function renderCompare() {
         <div class="compare-groups">${groupsHtml}</div>
       </div>
     `;
+  });
+}
+
+// ---------- Free Agents ----------
+
+async function renderFreeAgents() {
+  const slot = currentSlot();
+  if (!slot) { location.hash = "#/"; return; }
+  const agents = await api(`/api/saves/${slot}/free-agents`);
+
+  app.innerHTML = `
+    <div class="panel">
+      <h2>Top Free Agents</h2>
+      <p class="meta" style="color:var(--text-dim); font-size:13px;">
+        The best available fighters outside the UFC, ranked by the game's scouting judgment.
+        Their records keep evolving as they fight off-screen.
+      </p>
+      ${agents.length ? `
+        <table class="stats-table rankings-table">
+          <thead><tr><th>#</th><th>Fighter</th><th>Division</th><th>Record</th><th>Age</th><th>Score</th><th></th></tr></thead>
+          <tbody>
+            ${agents.map((f, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><a href="#/fighter/${f.id}">${f.name}</a>${f.nickname ? ` <span class="nickname">"${f.nickname}"</span>` : ""}</td>
+                <td>${f.weight_class}</td>
+                <td>${f.record}</td>
+                <td>${f.age}</td>
+                <td>${f.fa_score}</td>
+                <td><button class="btn btn-sm" data-sign-id="${f.id}" data-sign-name="${f.name}">Sign</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty-state">No free agents available right now.</div>`}
+    </div>
+  `;
+
+  app.querySelectorAll("[data-sign-id]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm(`Sign ${btn.dataset.signName} to the UFC?`)) return;
+      try {
+        await api(`/api/saves/${slot}/fighters/${btn.dataset.signId}/sign`, { method: "POST" });
+        await renderFreeAgents();
+      } catch (err) { alert(err.message); }
+    });
   });
 }

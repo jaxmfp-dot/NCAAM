@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS fighters (
     prime_end_age       INTEGER NOT NULL,
     popularity          INTEGER NOT NULL DEFAULT 20,
     contract_status     TEXT NOT NULL DEFAULT 'Signed',
+    promotion           TEXT NOT NULL DEFAULT 'UFC',     -- 'UFC' | 'Free Agent' | any other promotion name
     status               TEXT NOT NULL DEFAULT 'Active',  -- Active | Retired (roster membership; independent of injury_status)
     archetype           TEXT,
 
