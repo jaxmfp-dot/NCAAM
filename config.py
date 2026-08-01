@@ -254,6 +254,14 @@ RANKING_RECENCY_HALFLIFE_DAYS = 365.0  # a win's point value halves every ~1 yea
 RANKING_MAX_FIGHTS_CONSIDERED = 10    # only a fighter's most recent N wins count toward ranking
 RANKING_TOP_N = 15
 
+# A fighter imported with real-world standing but no sim fight history yet gets a
+# rank-seed (1-15) instead of points earned in-game. It decays with the same half-life
+# as a real win, so the seeded order holds on day one but fades as sim history replaces
+# it -- rank 1 is worth SEED_RANK_TOP_POINTS, rank 15 worth SEED_RANK_BOTTOM_POINTS,
+# linearly interpolated between.
+SEED_RANK_TOP_POINTS = 500.0
+SEED_RANK_BOTTOM_POINTS = 150.0
+
 # --- Post-fight momentum / popularity shifts ----------------------------
 
 MOMENTUM_WIN_DELTA = 8

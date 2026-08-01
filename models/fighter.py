@@ -83,6 +83,18 @@ _VALID_WEIGHT_CLASSES = {d["key"] for d in config.WEIGHT_CLASSES}
 _RECORD_INT_FIELDS = set(RECORD_FIELDS) | {"prime_start_age", "prime_end_age"}
 
 
+def set_rank_seed(conn: sqlite3.Connection, fighter_id: int, rank: int | None, as_of_date: str):
+    """Gives a fighter a starting-credential rank (1-15) with no sim fight history yet;
+    see engine/rankings.py for how it decays. Pass rank=None to clear a seed."""
+    if rank is not None and not (1 <= rank <= 15):
+        raise ValueError("rank must be between 1 and 15 (or None to clear)")
+    conn.execute(
+        "UPDATE fighters SET manual_rank_seed = ?, manual_rank_seed_date = ? WHERE id = ?",
+        (rank, as_of_date if rank is not None else None, fighter_id),
+    )
+    conn.commit()
+
+
 def update_fighter(conn: sqlite3.Connection, fighter_id: int, updates: dict) -> dict:
     """In-game editor: validates and clamps a partial update, editable-field whitelist
     is INSERTABLE_FIELDS (everything the importer/generator can set)."""

@@ -92,6 +92,14 @@ CREATE TABLE IF NOT EXISTS fighters (
 
     retired_date         TEXT,   -- ISO date, set when status becomes 'Retired'
 
+    -- Rank seed: a starting-credential rank (1-15) for a fighter imported with
+    -- real-world standing but no in-game fight history yet. Decays via the same
+    -- recency half-life as real win points (see engine/rankings.py) so it fades
+    -- out naturally as sim history accumulates. Champions are seeded directly on
+    -- the titles table instead (no bout required), not through this field.
+    manual_rank_seed         INTEGER,
+    manual_rank_seed_date    TEXT,   -- ISO date the seed was set, anchors the decay
+
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

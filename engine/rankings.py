@@ -37,6 +37,18 @@ def rank_bonus(rank: int | None) -> float:
     return 0.0
 
 
+def _seed_points(manual_rank_seed: int) -> float:
+    frac = (manual_rank_seed - 1) / 14  # 0.0 at rank 1, 1.0 at rank 15
+    return config.SEED_RANK_TOP_POINTS - frac * (config.SEED_RANK_TOP_POINTS - config.SEED_RANK_BOTTOM_POINTS)
+
+
+def _seed_bonus(fighter_row: dict, as_of: date) -> float:
+    seed, seed_date = fighter_row.get("manual_rank_seed"), fighter_row.get("manual_rank_seed_date")
+    if seed is None or seed_date is None:
+        return 0.0
+    return _seed_points(seed) * _recency_weight(seed_date, as_of)
+
+
 def _fighter_points(conn: sqlite3.Connection, fighter_id: int, as_of: date) -> float:
     rows = conn.execute(
         "SELECT b.fighter_a_id, b.a_faced_rank, b.b_faced_rank, b.method, e.event_date "
@@ -74,7 +86,7 @@ def compute_rankings(conn: sqlite3.Connection, weight_class: str, gender: str,
         f = dict(row)
         if f["id"] in champion_ids:
             continue
-        points = _fighter_points(conn, f["id"], as_of)
+        points = _fighter_points(conn, f["id"], as_of) + _seed_bonus(f, as_of)
         if points > 0:
             scored.append((points, f))
 
